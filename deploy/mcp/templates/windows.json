@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "oh-kb": {
+      "command": "cmd.exe",
+      "args": [
+        "/c",
+        "npx -y mcp-remote https://kb.guanmingkun.ltd/mcp/ --header \"Authorization: Bearer %OH_KB_TOKEN%\""
+      ]
+    }
+  }
+}

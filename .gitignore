@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Node
+node_modules/
+dist/
+build/
+coverage/
+*.log
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+cookies.txt
+*.csv
+*.db
+*.sqlite
+*.sqlite3
+
+# Runtime data and models
+var/
+models/
+*.pdf
+
+# Local runtime configuration
+deploy/cloudflared/config.yml
+
+# Editors, OS and local tooling
+.vscode/
+.idea/
+.codebuddy/
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+
+# Tool output
+playwright-report/
+test-results/

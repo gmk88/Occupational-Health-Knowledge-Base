@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "splits": {
+    "train": [
+      {"query": "喷漆岗位苯系物接触限值是多少", "mode": "hybrid", "relevant_document_ids": [], "exact_term": "苯系物"},
+      {"query": "噪声职业接触限值", "mode": "semantic", "relevant_document_ids": []}
+    ],
+    "validation": [
+      {"query": "PC-TWA 定义", "mode": "keyword", "relevant_document_ids": [], "exact_term": "PC-TWA"}
+    ],
+    "test": [
+      {"query": "CAS 71-43-2 接触限值", "mode": "hybrid", "relevant_document_ids": [], "exact_term": "CAS 71-43-2"},
+      {"query": "GBZ 2.1-2019 尘肺病", "mode": "hybrid", "relevant_document_ids": [], "exact_term": "GBZ 2.1-2019"}
+    ]
+  },
+  "note": "relevant_document_ids 在部署准备阶段由标注样本填充；不得用 test 切分调参。"
+}

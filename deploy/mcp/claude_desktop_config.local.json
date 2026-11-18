@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "oh-kb": {
+      "command": ".\\backend\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "occupational_health.mcp.server"],
+      "env": {
+        "OH_API_BASE_URL": "http://127.0.0.1:8000/api/v1",
+        "OH_API_TOKEN": "REPLACE_WITH_MCP_KEY"
+      }
+    }
+  }
+}

@@ -1,0 +1,1948 @@
+openapi: 3.0.3
+info:
+  title: 职业健康知识库 API
+  version: 1.0.0
+  description: |
+    PDF 文档、异步任务、混合检索、版本、质量与权限接口。
+    所有 JSON 响应使用 `{code, message, data, request_id}` 信封。
+    网页使用安全会话 Cookie，外部系统使用 Bearer API Key。
+    普通使用者只能获得脱敏内容；`view=raw` 和管理操作仅限管理员。
+    破坏性变更通过新的基础路径版本提供。
+servers:
+  - url: /api/v1
+security:
+  - cookieAuth: []
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Documents
+  - name: Jobs
+  - name: Search
+  - name: Taxonomy
+  - name: System
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      security: []
+      summary: 网页账号登录并建立安全会话
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功；服务端同时设置 HttpOnly、Secure、SameSite=Strict Cookie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrincipalResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: 撤销当前网页会话
+      responses:
+        '200':
+          description: 会话已撤销
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmptyResponse'
+        default:
+          $ref: '#/components/responses/Error'
+  /auth/me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentPrincipal
+      summary: 获取当前账号或接入方信息
+      responses:
+        '200':
+          description: 当前主体
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrincipalResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+  /system/limits:
+    get:
+      tags: [System]
+      operationId: getSystemLimits
+      summary: 获取上传、查询和调用限制
+      responses:
+        '200':
+          description: 当前生效限制，网页上传前必须读取并展示
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitsResponse'
+        default:
+          $ref: '#/components/responses/Error'
+  /health:
+    get:
+      tags: [System]
+      operationId: getHealth
+      security: []
+      summary: 获取存活与就绪状态，不泄露内部地址或凭据
+      responses:
+        '200':
+          description: 服务存活；dependencies 中可能存在降级项
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: 核心依赖未就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        default:
+          $ref: '#/components/responses/Error'
+  /health/live:
+    get:
+      tags: [System]
+      operationId: getHealthLive
+      security: []
+      summary: 纯存活探针，不检查外部依赖
+      responses:
+        '200':
+          description: 进程存活
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthLiveResponse'
+        default:
+          $ref: '#/components/responses/Error'
+  /dashboard/summary:
+    get:
+      tags: [Dashboard]
+      operationId: getDashboardSummary
+      summary: 首页汇总（总数、状态、场景计数、标签计数与最近文档）
+      parameters:
+        - name: refresh
+          in: query
+          description: 跳过服务端 15 秒缓存
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: 首页汇总
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardSummaryResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /documents:
+    get:
+      tags: [Documents]
+      operationId: listDocuments
+      summary: 分页查询文档
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Fields'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/DocumentStatus'
+        - name: category_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: tag_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: q
+          in: query
+          description: 仅匹配文档标题和文件名，不是全文检索
+          schema:
+            type: string
+            maxLength: 200
+        - name: uploaded_from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: uploaded_to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: 文档页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [Documents]
+      operationId: uploadDocument
+      summary: 上传单个 PDF 并创建异步处理任务
+      description: 需要管理员或 documents:write scope。网页批量上传通过受控并发调用本接口完成，批次上限由 /system/limits 提供。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DocumentUpload'
+            encoding:
+              file:
+                contentType: application/pdf
+      responses:
+        '202':
+          description: 已接收并创建任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '200':
+          description: 内容指纹重复，返回既有记录且不创建任务或向量
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          description: 文件大小或页数超限，错误 data 包含实际值和上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/Error'
+  /documents/{documentId}:
+    get:
+      tags: [Documents]
+      operationId: getDocument
+      summary: 获取文档详情
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: 文档详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      tags: [Documents]
+      operationId: updateDocumentMetadata
+      summary: 修改标题、分类、标签、来源或备注
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentPatch'
+      responses:
+        '200':
+          description: 元数据已更新；分类和标签过滤随索引发布生效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      tags: [Documents]
+      operationId: deleteDocument
+      summary: 逻辑删除文档并异步清理索引和文件
+      description: 调用前网页必须二次确认；数据库可见性先失效，物理清理由任务完成。
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '202':
+          description: 删除任务已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+  /documents/{documentId}/content:
+    get:
+      tags: [Documents]
+      operationId: getOriginalDocumentContent
+      summary: 管理员查看原始 PDF
+      description: 每次成功访问均记录原文查看审计；普通使用者必须收到 403。
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+        - name: version
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: 原始 PDF 二进制
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+  /documents/{documentId}/pages/{pageNumber}:
+    get:
+      tags: [Documents]
+      operationId: getDocumentPage
+      summary: 获取按权限处理的页面文本、坐标和高亮映射
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+        - $ref: '#/components/parameters/PageNumber'
+        - name: version
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: view
+          in: query
+          description: raw 仅管理员可用并记录审计
+          schema:
+            type: string
+            enum: [masked, raw]
+            default: masked
+      responses:
+        '200':
+          description: 页面提取文本与定位信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageTextResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+  /documents/{documentId}/quality-report:
+    get:
+      tags: [Documents]
+      operationId: getQualityReport
+      summary: 获取或导出指定处理修订的质量报告
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+        - name: version
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: pipeline_revision
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        '200':
+          description: 同一报告快照的 JSON 或 CSV 表示
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QualityReportResponse'
+            text/csv:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+  /documents/{documentId}/versions:
+    get:
+      tags: [Documents]
+      operationId: listDocumentVersions
+      summary: 查看版本历史
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: 版本页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [Documents]
+      operationId: uploadDocumentVersion
+      summary: 在既有文档上显式上传新版本
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionUpload'
+            encoding:
+              file:
+                contentType: application/pdf
+      responses:
+        '202':
+          description: 新版本已接收并创建任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '200':
+          description: 相同内容重复提交，返回既有版本
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+  /documents/{documentId}/versions/{versionNumber}/rollback:
+    post:
+      tags: [Documents]
+      operationId: rollbackDocumentVersion
+      summary: 回滚到指定历史版本
+      description: 复用兼容索引或创建重建任务；版本号保持原值，后续新版本号继续递增。
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+        - $ref: '#/components/parameters/VersionNumber'
+      responses:
+        '202':
+          description: 回滚/激活任务已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+  /documents/{documentId}/reprocess:
+    post:
+      tags: [Documents]
+      operationId: reprocessDocument
+      summary: 从原文件重新处理文档，成功后替换当前处理修订
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 500
+      responses:
+        '202':
+          description: 重新处理任务已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+  /documents/{documentId}/masking-corrections:
+    post:
+      tags: [Documents]
+      operationId: correctMasking
+      summary: 人工补加或取消敏感信息标记
+      description: 在受影响 Page/Chunk 和索引发布完成后返回 200，保证后续展示与检索立即使用新 masking revision。
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [corrections]
+              properties:
+                corrections:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    $ref: '#/components/schemas/MaskingCorrection'
+      responses:
+        '200':
+          description: 修正与受影响索引已同步发布
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaskingCorrectionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+  /jobs:
+    get:
+      tags: [Jobs]
+      operationId: listJobs
+      summary: 查询处理任务与页级进度
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Fields'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/JobStatus'
+        - name: document_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: ids
+          in: query
+          description: 逗号分隔的任务 ID，最多 100 个；用于批量轮询
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 任务页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/Error'
+  /jobs/{jobId}:
+    get:
+      tags: [Jobs]
+      operationId: getJob
+      summary: 获取任务状态、阶段、进度和错误摘要
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: 任务详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+  /jobs/{jobId}/retry:
+    post:
+      tags: [Jobs]
+      operationId: retryJob
+      summary: 从失败阶段续跑，创建关联的新任务
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '202':
+          description: 重试任务已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+  /jobs/{jobId}/cancel:
+    post:
+      tags: [Jobs]
+      operationId: cancelJob
+      summary: 请求协作式取消并隔离暂存数据
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '202':
+          description: 取消请求已接受，最终状态通过任务查询获得
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+  /search:
+    post:
+      tags: [Search]
+      operationId: searchKnowledgeBase
+      summary: 语义、BM25 关键词或 RRF 混合检索
+      description: 管理员可使用 include_raw=true 同时检索原文与脱敏关键词字段并记录审计；普通使用者该值必须为 false。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        '200':
+          description: 检索结果；无结果与分路降级均使用 200 并显式表达
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: 两路召回均不可用，不伪造空结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/Error'
+  /categories:
+    get:
+      tags: [Taxonomy]
+      operationId: listCategories
+      summary: 获取预置职业病场景
+      responses:
+        '200':
+          description: 场景列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryListResponse'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [Taxonomy]
+      operationId: createCategory
+      summary: 管理员新增受控分类
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryInput'
+      responses:
+        '201':
+          description: 分类已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+  /tags:
+    get:
+      tags: [Taxonomy]
+      operationId: listTags
+      summary: 查询标签并获得已有标签建议
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: 标签页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagListResponse'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [Taxonomy]
+      operationId: createTag
+      summary: 创建自由标签
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagInput'
+      responses:
+        '201':
+          description: 标签已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagResponse'
+        '200':
+          description: 规范化名称已存在，返回既有标签
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/Error'
+  /tags/{tagId}/merge:
+    post:
+      tags: [Taxonomy]
+      operationId: mergeTag
+      summary: 合并重复标签并迁移文档关联与索引
+      parameters:
+        - name: tagId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_tag_id]
+              properties:
+                target_tag_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: 标签关联已迁移，旧标签作为别名保留
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: oh_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: APIKey
+  parameters:
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PageNumber:
+      name: pageNumber
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    VersionNumber:
+      name: versionNumber
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Sort:
+      name: sort
+      in: query
+      description: 白名单字段，前缀 - 表示降序，例如 -created_at
+      schema:
+        type: string
+        default: -created_at
+    Fields:
+      name: fields
+      in: query
+      description: 可选的逗号分隔响应字段白名单；未知字段返回参数错误
+      schema:
+        type: string
+  responses:
+    ValidationError:
+      description: 参数、文件结构或内容校验失败，业务码可定位
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: 未登录、会话过期、密钥无效或过期
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: 权限或 scope 不足；拒绝行为记录审计
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: 对象不存在或当前主体不可见
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: 当前状态不允许该操作，data 包含安全的状态说明
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimited:
+      description: 超过调用频率限制
+      headers:
+        Retry-After:
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: 建议等待秒数
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Error:
+      description: 统一业务错误；不泄露内部堆栈、模型地址或存储路径
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ErrorCode:
+      type: string
+      enum:
+        - VALIDATION_ERROR
+        - UNAUTHORIZED
+        - SESSION_EXPIRED
+        - API_KEY_EXPIRED
+        - FORBIDDEN
+        - NOT_FOUND
+        - CONFLICT
+        - PDF_INVALID
+        - PDF_ENCRYPTED
+        - FILE_TOO_LARGE
+        - TOO_MANY_PAGES
+        - BATCH_TOO_LARGE
+        - QUERY_TOO_LONG
+        - QUERY_EMPTY
+        - RATE_LIMITED
+        - TASK_NOT_RETRYABLE
+        - QUALITY_REVIEW_REQUIRED
+        - MODEL_UNAVAILABLE
+        - INDEX_UNAVAILABLE
+        - STORAGE_UNAVAILABLE
+        - INTERNAL_ERROR
+    ErrorResponse:
+      type: object
+      required: [code, message, data, request_id]
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+          description: 可展示的安全错误说明
+        data:
+          nullable: true
+          description: 可选的结构化参数、实际上限或安全状态信息
+        request_id:
+          type: string
+    EmptyResponse:
+      type: object
+      required: [code, message, data, request_id]
+      properties:
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
+        data:
+          nullable: true
+          description: 始终为 null
+        request_id:
+          type: string
+    LoginRequest:
+      type: object
+      required: [login_name, password]
+      properties:
+        login_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 1024
+    Principal:
+      type: object
+      required: [id, name, actor_type, role, scopes]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        actor_type:
+          type: string
+          enum: [user, api_client]
+        role:
+          type: string
+          enum: [admin, viewer, service]
+        scopes:
+          type: array
+          items:
+            type: string
+        session_expires_at:
+          type: string
+          format: date-time
+          nullable: true
+    PrincipalResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Principal'
+    SuccessEnvelope:
+      type: object
+      required: [code, message, data, request_id]
+      properties:
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
+          example: success
+        data:
+          description: 由具体响应 schema 限定
+        request_id:
+          type: string
+          format: uuid
+    DocumentStatus:
+      type: string
+      enum: [processing, searchable, needs_review, deleted]
+    VersionStatus:
+      type: string
+      enum: [processing, current, replaced, needs_review, failed]
+    JobStatus:
+      type: string
+      enum: [queued, parsing, embedding, completed, partial_success, failed, cancelled]
+    JobStage:
+      type: string
+      enum: [validation, extraction, cleaning, masking, chunking, embedding, indexing, publishing, cleanup]
+    Document:
+      type: object
+      required: [id, title, original_filename, status, category, tags, uploader_id, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        original_filename:
+          type: string
+        status:
+          $ref: '#/components/schemas/DocumentStatus'
+        category:
+          $ref: '#/components/schemas/Category'
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+        source:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        uploader_id:
+          type: string
+          format: uuid
+        current_version:
+          $ref: '#/components/schemas/DocumentVersion'
+        quality_summary:
+          type: object
+          nullable: true
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    DocumentVersion:
+      type: object
+      required: [id, version_number, status, content_sha256, size_bytes, page_count, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        version_number:
+          type: integer
+          minimum: 1
+        status:
+          $ref: '#/components/schemas/VersionStatus'
+        content_sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        size_bytes:
+          type: integer
+          minimum: 1
+        page_count:
+          type: integer
+          minimum: 1
+        pipeline_revision:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        activated_at:
+          type: string
+          format: date-time
+          nullable: true
+    ListMeta:
+      type: object
+      required: [page, page_size, total, total_pages]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+        total_pages:
+          type: integer
+          minimum: 0
+    DocumentList:
+      type: object
+      required: [items, meta]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Document'
+        meta:
+          $ref: '#/components/schemas/ListMeta'
+    DocumentListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/DocumentList'
+    DocumentResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Document'
+    DocumentUpload:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+          description: 支持 PDF、Word(.docx)、TXT、Markdown(.md/.markdown)
+        title:
+          type: string
+          maxLength: 300
+        category_id:
+          type: string
+          format: uuid
+          description: 缺省使用预置 general 通用场景
+        tags:
+          type: array
+          uniqueItems: true
+          maxItems: 50
+          items:
+            type: string
+            maxLength: 100
+        source:
+          type: string
+          maxLength: 500
+        notes:
+          type: string
+          maxLength: 5000
+        chunk_mode:
+          type: string
+          enum: [structure, sentence, fixed]
+          default: structure
+          description: 切分方式；structure=按结构（段落）、sentence=按句子、fixed=固定大小
+    VersionUpload:
+      allOf:
+        - $ref: '#/components/schemas/DocumentUpload'
+        - type: object
+          properties:
+            notes:
+              type: string
+              maxLength: 5000
+    DocumentPatch:
+      type: object
+      minProperties: 1
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 300
+        category_id:
+          type: string
+          format: uuid
+        tags:
+          type: array
+          uniqueItems: true
+          maxItems: 50
+          items:
+            type: string
+            maxLength: 100
+        source:
+          type: string
+          maxLength: 500
+          nullable: true
+        notes:
+          type: string
+          maxLength: 5000
+          nullable: true
+    UploadData:
+      type: object
+      required: [document_id, version_id, job_id, duplicate, status]
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        version_id:
+          type: string
+          format: uuid
+        job_id:
+          type: string
+          format: uuid
+          nullable: true
+        duplicate:
+          type: boolean
+        status:
+          $ref: '#/components/schemas/JobStatus'
+          nullable: true
+    UploadResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/UploadData'
+    VersionList:
+      type: object
+      required: [items, meta]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentVersion'
+        meta:
+          $ref: '#/components/schemas/ListMeta'
+    VersionListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/VersionList'
+    Job:
+      type: object
+      required: [id, document_id, version_id, job_type, status, current_stage, processed_pages, total_pages, attempt_count, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        document_id:
+          type: string
+          format: uuid
+        version_id:
+          type: string
+          format: uuid
+          nullable: true
+        job_type:
+          type: string
+          enum: [upload, retry, reprocess, rollback, delete, masking, rebuild]
+        status:
+          $ref: '#/components/schemas/JobStatus'
+        current_stage:
+          $ref: '#/components/schemas/JobStage'
+        pipeline_revision:
+          type: string
+          format: uuid
+        processed_pages:
+          type: integer
+          minimum: 0
+        total_pages:
+          type: integer
+          minimum: 0
+        elapsed_ms:
+          type: integer
+          minimum: 0
+        attempt_count:
+          type: integer
+          minimum: 0
+        retry_of_job_id:
+          type: string
+          format: uuid
+          nullable: true
+        error:
+          type: object
+          nullable: true
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            failed_pages:
+              type: array
+              items:
+                type: integer
+                minimum: 1
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+    JobResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Job'
+    JobList:
+      type: object
+      required: [items, meta]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Job'
+        meta:
+          $ref: '#/components/schemas/ListMeta'
+    JobListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/JobList'
+    QualityReport:
+      type: object
+      required: [document_id, version_id, job_id, page_count, effective_char_count, chunk_count, ocr_page_ratio, noise_char_count, low_quality_pages, failed_pages, processing_duration_ms, created_at]
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        version_id:
+          type: string
+          format: uuid
+        job_id:
+          type: string
+          format: uuid
+        pipeline_revision:
+          type: string
+          format: uuid
+        page_count:
+          type: integer
+          minimum: 0
+        effective_char_count:
+          type: integer
+          minimum: 0
+        chunk_count:
+          type: integer
+          minimum: 0
+        ocr_page_ratio:
+          type: number
+          minimum: 0
+          maximum: 1
+        average_ocr_confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          nullable: true
+        noise_char_count:
+          type: integer
+          minimum: 0
+        low_quality_pages:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        failed_pages:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        processing_duration_ms:
+          type: integer
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+    QualityReportResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/QualityReport'
+    PageText:
+      type: object
+      required: [document_id, version_number, page_number, source_type, view, text, spans]
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        version_number:
+          type: integer
+          minimum: 1
+        page_number:
+          type: integer
+          minimum: 1
+        source_type:
+          type: string
+          enum: [text_layer, ocr, mixed]
+        view:
+          type: string
+          enum: [masked, raw]
+        text:
+          type: string
+        spans:
+          type: array
+          items:
+            type: object
+            required: [start_offset, end_offset]
+            properties:
+              start_offset:
+                type: integer
+                minimum: 0
+              end_offset:
+                type: integer
+                minimum: 1
+              bbox:
+                type: array
+                items:
+                  type: number
+                minItems: 4
+                maxItems: 4
+        quality_warnings:
+          type: array
+          items:
+            type: string
+    PageTextResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/PageText'
+    MaskingCorrection:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [add, reject]
+        annotation_id:
+          type: string
+          format: uuid
+          description: reject 时必填
+        page_number:
+          type: integer
+          minimum: 1
+          description: add 时必填
+        start_offset:
+          type: integer
+          minimum: 0
+          description: add 时必填，基于页面原文
+        end_offset:
+          type: integer
+          minimum: 1
+          description: add 时必填
+        base_text_hash:
+          type: string
+          description: add 时必填，防止文本基准变化
+        sensitive_type:
+          type: string
+          enum: [name, id_number, contact, health_result, other]
+        replacement:
+          type: string
+          minLength: 1
+          maxLength: 100
+    MaskingCorrectionData:
+      type: object
+      required: [document_id, masking_revision, updated_pages, updated_chunks, status]
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        masking_revision:
+          type: integer
+          minimum: 1
+        updated_pages:
+          type: integer
+          minimum: 0
+        updated_chunks:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum: [published]
+    MaskingCorrectionResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/MaskingCorrectionData'
+    SearchFilters:
+      type: object
+      properties:
+        document_ids:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        category_ids:
+          type: array
+          description: 职业病场景 ID；服务端会自动并入通用场景
+          maxItems: 100
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        tag_ids:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        scenario_ids:
+          type: array
+          description: 自动识别场景 ID；仅用于排序加权，不作为硬过滤
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        block_types:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: text 正文（含公式）/ table 表格
+          items:
+            type: string
+        include_replaced:
+          type: boolean
+          default: false
+          description: 是否包含已替代、废止或被 superseded 的版本
+        uploaded_from:
+          type: string
+          format: date-time
+        uploaded_to:
+          type: string
+          format: date-time
+    SearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 512
+        mode:
+          type: string
+          enum: [semantic, keyword, hybrid]
+          default: hybrid
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 5
+        filters:
+          $ref: '#/components/schemas/SearchFilters'
+        include_raw:
+          type: boolean
+          default: false
+          description: 仅管理员可设为 true；操作写入审计
+        rrf_k:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 60
+          description: 仅管理员或受信任接入方可覆盖，缺省使用服务端配置
+    SearchResult:
+      type: object
+      required: [chunk_id, text, document_id, document_name, version_number, page_start, page_end, category, tags, scores, recall_sources, highlights]
+      properties:
+        chunk_id:
+          type: string
+          format: uuid
+          description: 返回给调用方的语义块 ID
+        matched_chunk_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: 命中子块 ID；父块展开时用于追溯
+        text:
+          type: string
+          description: 当前角色被授权查看的脱敏或原文片段
+        document_id:
+          type: string
+          format: uuid
+        document_name:
+          type: string
+        version_number:
+          type: integer
+          minimum: 1
+        lifecycle_status:
+          type: string
+          enum: [current, replaced, abolished, superseded, pending]
+        standard_no:
+          type: string
+          nullable: true
+        related_documents:
+          type: array
+          items:
+            type: object
+        amendment_notice:
+          type: string
+          nullable: true
+        page_start:
+          type: integer
+          minimum: 1
+        page_end:
+          type: integer
+          minimum: 1
+        category:
+          $ref: '#/components/schemas/Category'
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+        scores:
+          type: object
+          required: [rrf]
+          properties:
+            semantic:
+              type: number
+              nullable: true
+            keyword:
+              type: number
+              nullable: true
+            rrf:
+              type: number
+        ranks:
+          type: object
+          properties:
+            semantic:
+              type: integer
+              minimum: 1
+              nullable: true
+            keyword:
+              type: integer
+              minimum: 1
+              nullable: true
+        recall_sources:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [semantic, keyword]
+        highlights:
+          type: array
+          items:
+            type: object
+            required: [start_offset, end_offset]
+            properties:
+              start_offset:
+                type: integer
+                minimum: 0
+              end_offset:
+                type: integer
+                minimum: 1
+    SearchData:
+      type: object
+      required: [items, total, took_ms, mode, degraded, degraded_sources, suggestions]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResult'
+        total:
+          type: integer
+          minimum: 0
+        took_ms:
+          type: integer
+          minimum: 0
+        mode:
+          type: string
+          enum: [semantic, keyword, hybrid]
+        ranking:
+          type: string
+          example: RRF(k=60), equal weights
+        degraded:
+          type: boolean
+        degraded_sources:
+          type: array
+          items:
+            type: string
+            enum: [semantic, keyword]
+        suggestions:
+          type: array
+          items:
+            type: string
+            enum: [change_keywords, relax_filters, switch_mode]
+    SearchResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/SearchData'
+    Category:
+      type: object
+      required: [id, code, name, active]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        active:
+          type: boolean
+    CategoryInput:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,50}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+    CategoryResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Category'
+    CategoryListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Category'
+    Tag:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        merged_into_id:
+          type: string
+          format: uuid
+          nullable: true
+    TagInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+    TagResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Tag'
+    TagList:
+      type: object
+      required: [items, meta]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+        meta:
+          $ref: '#/components/schemas/ListMeta'
+    TagListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/TagList'
+    Limits:
+      type: object
+      required: [max_file_size_bytes, max_pages_per_file, max_files_per_web_batch, max_query_characters, default_top_k, max_top_k, rate_limit_per_minute, upload_limit_per_minute]
+      properties:
+        max_file_size_bytes:
+          type: integer
+          example: 104857600
+        max_pages_per_file:
+          type: integer
+          example: 500
+        max_files_per_web_batch:
+          type: integer
+          example: 20
+        max_query_characters:
+          type: integer
+          example: 512
+        default_top_k:
+          type: integer
+          example: 5
+        max_top_k:
+          type: integer
+          example: 5
+        rate_limit_per_minute:
+          type: integer
+          example: 60
+        upload_limit_per_minute:
+          type: integer
+          example: 10
+        supported_media_types:
+          type: array
+          items:
+            type: string
+          example: [application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, text/plain, text/markdown]
+    LimitsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Limits'
+    Health:
+      type: object
+      required: [status, version, dependencies]
+      properties:
+        status:
+          type: string
+          enum: [ready, degraded, not_ready]
+        version:
+          type: string
+        dependencies:
+          type: array
+          items:
+            type: object
+            required: [name, status]
+            properties:
+              name:
+                type: string
+                enum: [postgresql, redis, qdrant, embedding, storage]
+              status:
+                type: string
+                enum: [up, down, degraded]
+              latency_ms:
+                type: integer
+                minimum: 0
+                nullable: true
+    HealthResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Health'
+    HealthLiveResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [status, version]
+              properties:
+                status:
+                  type: string
+                  enum: [alive]
+                version:
+                  type: string
+    DashboardSummaryResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [total, status_counts, categories, tags, recent_documents]
+              properties:
+                total:
+                  type: integer
+                status_counts:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                categories:
+                  type: array
+                  items:
+                    type: object
+                    required: [id, code, name, active, count]
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      code:
+                        type: string
+                      name:
+                        type: string
+                      active:
+                        type: boolean
+                      count:
+                        type: integer
+                tags:
+                  type: array
+                  items:
+                    type: object
+                    required: [id, name, count]
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+                      count:
+                        type: integer
+                recent_documents:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Document'
