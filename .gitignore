@@ -23,11 +23,19 @@ coverage/
 !.env.example
 *.pem
 *.key
+cookies.txt
+*.csv
+*.db
+*.sqlite
+*.sqlite3
 
 # Runtime data and models
 var/
 models/
 *.pdf
+
+# Local runtime configuration
+deploy/cloudflared/config.yml
 
 # Editors and OS
 .vscode/

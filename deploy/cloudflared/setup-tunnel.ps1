@@ -1,11 +1,11 @@
 ﻿param(
-  [string]$Domain = "kb.guanmingkun.ltd",
+  [string]$Domain = "kb.example.com",
   [string]$TunnelName = "oh-kb"
 )
 
-# 一次性创建 Cloudflare Tunnel、绑定域名，并写好 config.yml。
+# 一次性创建 Cloudflare Tunnel、绑定域名，并基于 config.example.yml 生成 config.yml。
 # 用法：
-#   powershell -ExecutionPolicy Bypass -File deploy\cloudflared\setup-tunnel.ps1 -Domain kb.guanmingkun.ltd
+#   powershell -ExecutionPolicy Bypass -File deploy\cloudflared\setup-tunnel.ps1 -Domain kb.example.com
 
 $ErrorActionPreference = "Stop"
 
@@ -15,12 +15,15 @@ if (-not (Test-Path $cf)) {
   if ($command) { $cf = $command.Source } else { throw "未找到 cloudflared，请先执行 winget install --id Cloudflare.cloudflared -e" }
 }
 
+$templatePath = Join-Path $PSScriptRoot "config.example.yml"
 $configPath = Join-Path $PSScriptRoot "config.yml"
 $cloudflaredDir = Join-Path $env:USERPROFILE ".cloudflared"
 $certPath = Join-Path $cloudflaredDir "cert.pem"
 
+if (-not (Test-Path $templatePath)) { throw "缺少模板：$templatePath" }
+
 if (-not (Test-Path $certPath)) {
-  Write-Host "浏览器将打开 Cloudflare 登录页，请登录后选择kb.guanmingkun.ltd。" -ForegroundColor Yellow
+  Write-Host "浏览器将打开 Cloudflare 登录页，请登录后选择目标域名。" -ForegroundColor Yellow
   & $cf tunnel login
   if ($LASTEXITCODE -ne 0) { throw "cloudflared tunnel login 失败" }
 }
@@ -53,16 +56,20 @@ try {
 $credentials = Join-Path $cloudflaredDir "$id.json"
 if (-not (Test-Path $credentials)) { throw "找不到凭证文件：$credentials" }
 
-$content = [System.IO.File]::ReadAllText($configPath, [System.Text.Encoding]::UTF8)
-$content = $content.Replace("C:\Users\ASUS\.cloudflared", $cloudflaredDir)
+$content = [System.IO.File]::ReadAllText($templatePath, [System.Text.Encoding]::UTF8)
 $content = $content.Replace("REPLACE_WITH_TUNNEL_ID", $id)
-$content = $content.Replace("kb.guanmingkun.ltd", $Domain)
+$content = $content.Replace("kb.example.com", $Domain)
+$content = [regex]::Replace(
+  $content,
+  'credentials-file:\s+.*',
+  "credentials-file: $($credentials -replace '\\','/')"
+)
 [System.IO.File]::WriteAllText($configPath, $content, [System.Text.UTF8Encoding]::new($false))
 
 & $cf tunnel --config $configPath ingress validate
 
 Write-Host ""
-Write-Host "配置完成。接下来：" -ForegroundColor Green
+Write-Host "配置完成。config.yml 不要提交到 Git。" -ForegroundColor Green
 Write-Host "  1. 确认后端已启动（启动项目.bat）"
 Write-Host "  2. 双击 启动公网访问.bat"
 Write-Host "  3. 对方使用 https://$Domain/mcp/ 接入"
