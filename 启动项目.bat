@@ -21,7 +21,7 @@ echo.
 
 echo [0/7] 清理上次残留的 API / 向量化 / worker 进程...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0停止项目.ps1" >nul 2>&1
-timeout /t 2 /nobreak >nul
+ping -n 3 127.0.0.1 >nul
 
 echo [1/7] 启动基础设施 (PostgreSQL / Redis / Qdrant)...
 docker compose -f deploy\compose.yaml up -d --wait --wait-timeout 120
@@ -84,7 +84,7 @@ if errorlevel 1 (
 echo [6/7] 启动后端 API（端口 8000）...
 start "oh-api-watchdog" /min powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0deploy\scripts\supervise.ps1" -Service api
 echo     等待后端就绪（最多 120 秒）...
-call :wait_http "http://127.0.0.1:8000/health" 120
+call :wait_http "http://127.0.0.1:8000/api/v1/docs" 120
 if errorlevel 1 (
   echo     [错误] 后端未在 120 秒内就绪，请查看 var\log\backend.log 与 backend.err.log。
   echo     看门狗仍在后台重试，修复问题后无需重新运行本脚本。
@@ -112,7 +112,7 @@ echo  停止方式 : 运行 停止项目.bat
 echo ============================================
 echo.
 echo 基础设施检查：
-curl -s http://127.0.0.1:8000/api/v1/health
+curl -s http://127.0.0.1:8000/api/v1/docs -o nul -w "API HTTP %%{http_code}"
 echo.
 pause
 exit /b 0
@@ -124,7 +124,7 @@ docker compose -f deploy\compose.yaml exec -T postgres pg_isready -q >nul 2>&1
 if not errorlevel 1 exit /b 0
 set /a WAITED+=2
 if %WAITED% geq %~1 exit /b 1
-timeout /t 2 /nobreak >nul
+ping -n 3 127.0.0.1 >nul
 goto :wait_postgres_loop
 
 :wait_http
@@ -134,5 +134,5 @@ curl -sf -o nul --max-time 2 %~1 >nul 2>&1
 if not errorlevel 1 exit /b 0
 set /a WAITED+=2
 if %WAITED% geq %~2 exit /b 1
-timeout /t 2 /nobreak >nul
+ping -n 3 127.0.0.1 >nul
 goto :wait_http_loop

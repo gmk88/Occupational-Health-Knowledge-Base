@@ -23,24 +23,16 @@ coverage/
 !.env.example
 *.pem
 *.key
-cookies.txt
-*.csv
-*.db
-*.sqlite
-*.sqlite3
 
-# Runtime data and models
+# Runtime data and local model weights (not source packages)
 var/
-models/
+/models/
+/backend/models/
 *.pdf
 
-# Local runtime configuration
-deploy/cloudflared/config.yml
-
-# Editors, OS and local tooling
+# Editors and OS
 .vscode/
 .idea/
-.codebuddy/
 .DS_Store
 Thumbs.db
 *.tmp
