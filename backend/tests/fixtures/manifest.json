@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "sensitive_data_policy": "Synthetic values only; real employee records are forbidden.",
+  "fixtures": [
+    {"name": "text-100-pages.pdf", "generator": "text", "pages": 100, "expected_source": "text_layer", "expected_ocr_ratio": 0},
+    {"name": "scan-10-pages.pdf", "generator": "scan", "pages": 10, "expected_source": "ocr", "minimum_character_accuracy": 0.95},
+    {"name": "mixed.pdf", "generator": "mixed", "pages": 12, "expected_source": "mixed"},
+    {"name": "two-column-table.pdf", "generator": "layout", "pages": 6, "expected_warnings": ["multi_column", "table"]},
+    {"name": "encrypted.pdf", "generator": "encrypted", "pages": 1, "expected_error": "PDF_ENCRYPTED"},
+    {"name": "corrupt.pdf", "generator": "corrupt", "pages": 0, "expected_error": "PDF_INVALID"},
+    {"name": "zero-pages.pdf", "generator": "empty", "pages": 0, "expected_error": "PDF_INVALID"},
+    {"name": "oversize.pdf", "generator": "padding", "pages": 1, "expected_error": "FILE_TOO_LARGE"},
+    {"name": "sensitive-synthetic.pdf", "generator": "sensitive", "pages": 3, "expected_masked_types": ["name", "id_number", "contact", "health_result"]},
+    {"name": "versions-v1-v5.pdf", "generator": "versions", "pages": 5, "expected_versions": [1, 2, 3, 4, 5]}
+  ]
+}

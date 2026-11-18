@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "oh-kb": {
+      "url": "https://kb.guanmingkun.ltd/mcp/",
+      "headers": {
+        "Authorization": "Bearer REPLACE_WITH_MCP_KEY"
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+@host = http://127.0.0.1:8000/api/v1
+@token = {{API_KEY}}
+
+### 上传
+POST {{host}}/documents
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="sample.pdf"
+Content-Type: application/pdf
+
+< ./sample.pdf
+--boundary--
+
+### 轮询任务
+GET {{host}}/jobs/{{JOB_ID}}
+Authorization: Bearer {{token}}
+
+### 检索
+POST {{host}}/search
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"query": "喷漆岗位苯系物接触限值", "mode": "hybrid", "top_k": 10}
+
+### 读取页面
+GET {{host}}/documents/{{DOCUMENT_ID}}/pages/1
+Authorization: Bearer {{token}}
+
+### 删除
+DELETE {{host}}/documents/{{DOCUMENT_ID}}
+Authorization: Bearer {{token}}
