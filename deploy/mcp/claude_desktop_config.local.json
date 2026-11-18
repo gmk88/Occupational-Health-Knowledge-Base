@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "oh-kb": {
-      "command": ".\\backend\\.venv\\Scripts\\python.exe",
+      "command": "D:\\职业健康知识库\\backend\\.venv\\Scripts\\python.exe",
       "args": ["-m", "occupational_health.mcp.server"],
       "env": {
         "OH_API_BASE_URL": "http://127.0.0.1:8000/api/v1",

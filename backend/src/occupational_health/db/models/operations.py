@@ -11,12 +11,23 @@ from occupational_health.db.session import Base, utcnow
 from occupational_health.domain.enums import ActorType
 
 
+def _enum_values(enum_cls):
+    return [member.value for member in enum_cls]
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     request_id: Mapped[str] = mapped_column(String(36), index=True)
-    actor_type: Mapped[ActorType] = mapped_column(Enum(ActorType, native_enum=False, length=20))
+    actor_type: Mapped[ActorType] = mapped_column(
+        Enum(
+            ActorType,
+            native_enum=False,
+            length=20,
+            values_callable=_enum_values,
+        )
+    )
     actor_id: Mapped[uuid.UUID] = mapped_column(index=True)
     action: Mapped[str] = mapped_column(String(100), index=True)
     object_type: Mapped[str] = mapped_column(String(50))

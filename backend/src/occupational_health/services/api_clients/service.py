@@ -26,7 +26,6 @@ CLIENT_STATUSES = {"active", "disabled"}
 
 # 每个请求都查库不划算；限额变更后最多延迟一分钟生效。
 _LIMIT_CACHE: dict[uuid.UUID, tuple[int, float]] = {}
-_UPLOAD_LIMIT_CACHE: dict[uuid.UUID, tuple[int, float]] = {}
 _LIMIT_TTL_SECONDS = 60.0
 
 
@@ -113,7 +112,6 @@ class ApiClientService:
             client.updated_at = utcnow()
             db.commit()
             _LIMIT_CACHE.pop(client.id, None)
-            _UPLOAD_LIMIT_CACHE.pop(client.id, None)
             return _client_detail(db, client)
 
     def rotate_key(self, client_id: uuid.UUID) -> dict:
@@ -166,39 +164,20 @@ class ApiClientService:
         _LIMIT_CACHE[client_id] = (limit, now + _LIMIT_TTL_SECONDS)
         return limit
 
-    def upload_limit_for(self, client_id: uuid.UUID) -> int:
-        """Per-client uploads-per-minute, cached briefly."""
-        now = time.monotonic()
-        cached = _UPLOAD_LIMIT_CACHE.get(client_id)
-        if cached and cached[1] > now:
-            return cached[0]
-        with SessionLocal() as db:
-            client = db.get(APIClient, client_id)
-            limit = client.upload_limit_per_minute if client else 10
-        _UPLOAD_LIMIT_CACHE[client_id] = (limit, now + _LIMIT_TTL_SECONDS)
-        return limit
-
     def authenticate(self, raw_key: str) -> PrincipalData:
         secret_hash = hash_key(raw_key)
         with SessionLocal() as db:
-            row = db.execute(
-                select(APIKey, APIClient)
-                .join(APIClient, APIClient.id == APIKey.client_id)
-                .where(APIKey.secret_hash == secret_hash)
-            ).first()
-            if not row:
+            key = db.scalar(select(APIKey).where(APIKey.secret_hash == secret_hash))
+            if not key:
                 raise ApiError(401, "API_KEY_EXPIRED", "密钥无效或过期")
-            key, client = row
             now = utcnow()
             if key.revoked_at or (key.expires_at and key.expires_at <= now):
                 raise ApiError(401, "API_KEY_EXPIRED", "密钥无效或过期")
-            if client.status != "active":
+            client = db.get(APIClient, key.client_id)
+            if not client or client.status != "active":
                 raise ApiError(401, "UNAUTHORIZED", "接入方已停用")
-            # 每个请求都写 last_used_at 会造成大量无用提交，最多每分钟一次。
-            last_used = key.last_used_at
-            if last_used is None or (now - last_used).total_seconds() >= 60:
-                key.last_used_at = now
-                db.commit()
+            key.last_used_at = now
+            db.commit()
             return PrincipalData(
                 client.id,
                 client.name,

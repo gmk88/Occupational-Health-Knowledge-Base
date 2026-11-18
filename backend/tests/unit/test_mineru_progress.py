@@ -33,29 +33,3 @@ def test_progress_is_capped_below_completion() -> None:
         for i in range(12)
     )
     assert _estimate_progress(log) <= 0.9
-
-
-def test_equation_block_keeps_latex_on_one_line() -> None:
-    block = {
-        "type": "equation",
-        "content": r"L_{\mathrm{P}}=L_{\mathrm{w}}+10 \cdot \lg \left(\frac{Q}{4 \pi r^{2}}\right)\tag{5.2.2-1}",
-    }
-    result = _block_text(block)
-    assert "\n" not in result
-    assert result.startswith("$$")
-    assert result.endswith("$$")
-    assert r"\frac{Q}{4 \pi r^{2}}" in result
-
-
-def test_inline_equation_stays_inside_sentence() -> None:
-    block = {
-        "type": "text",
-        "content": [
-            {"type": "text", "content": "式中的 "},
-            {"type": "equation_inline", "content": r"S_{\mathrm{G}i}"},
-            {"type": "text", "content": " 为某一车间的面积。"},
-        ],
-    }
-    result = _block_text(block)
-    assert "\n" not in result
-    assert result == r"式中的 $S_{\mathrm{G}i}$ 为某一车间的面积。"

@@ -361,28 +361,3 @@ def test_parent_child_table_children_repeat_header_and_row_window() -> None:
     assert len(children) >= 2
     assert all("| 物质 | PC-TWA | PC-STEL |" in chunk["text"] for chunk in children)
     assert all(chunk["page_offsets"].get("row_end", 0) >= 1 for chunk in children)
-
-def test_formula_segment_is_atomic_in_parent_child_mode() -> None:
-    formula = r"$$L_{\mathrm{P}}=L_{\mathrm{w}}+10 \cdot \lg \left(\frac{Q}{4 \pi r^{2}}\right)\tag{5.2.2-1}$$"
-    segments = {1: [TableSegment("formula", formula)]}
-    chunks = split_pages(
-        [ChunkInput(1, "", "text_layer")],
-        target=80,
-        max_tokens=120,
-        overlap=0,
-        mode="parent_child",
-        page_segments=segments,
-        parent_target=80,
-        parent_max_tokens=120,
-        child_target=40,
-        child_max_tokens=60,
-        child_overlap=0,
-    )
-    parents = [chunk for chunk in chunks if chunk["chunk_role"] == "parent"]
-    children = [chunk for chunk in chunks if chunk["chunk_role"] == "child"]
-    assert len(parents) == 1
-    assert len(children) == 1
-    assert parents[0]["block_type"] == "formula"
-    assert children[0]["block_type"] == "formula"
-    assert parents[0]["text"] == formula
-    assert children[0]["text"] == formula

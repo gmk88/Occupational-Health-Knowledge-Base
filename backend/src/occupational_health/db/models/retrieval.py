@@ -11,6 +11,10 @@ from occupational_health.db.session import Base, utcnow
 from occupational_health.domain.enums import ActorType, RetrievalMode
 
 
+def _enum_values(enum_cls):
+    return [member.value for member in enum_cls]
+
+
 class SearchAudit(Base):
     __tablename__ = "search_audits"
     __table_args__ = (
@@ -19,9 +23,23 @@ class SearchAudit(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     request_id: Mapped[str] = mapped_column(String(36), index=True)
-    actor_type: Mapped[ActorType] = mapped_column(Enum(ActorType, native_enum=False, length=20))
+    actor_type: Mapped[ActorType] = mapped_column(
+        Enum(
+            ActorType,
+            native_enum=False,
+            length=20,
+            values_callable=_enum_values,
+        )
+    )
     actor_id: Mapped[uuid.UUID] = mapped_column(index=True)
-    mode: Mapped[RetrievalMode] = mapped_column(Enum(RetrievalMode, native_enum=False, length=20))
+    mode: Mapped[RetrievalMode] = mapped_column(
+        Enum(
+            RetrievalMode,
+            native_enum=False,
+            length=20,
+            values_callable=_enum_values,
+        )
+    )
     query_hash: Mapped[str] = mapped_column(String(64))
     query_length: Mapped[int] = mapped_column(Integer)
     filters: Mapped[dict] = mapped_column(JSONB, default=dict)

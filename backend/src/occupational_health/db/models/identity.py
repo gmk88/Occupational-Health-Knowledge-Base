@@ -10,6 +10,10 @@ from occupational_health.db.session import Base, utcnow
 from occupational_health.domain.enums import AccountStatus, UserRole
 
 
+def _enum_values(enum_cls):
+    return [member.value for member in enum_cls]
+
+
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (
@@ -21,9 +25,22 @@ class User(Base):
     normalized_login: Mapped[str] = mapped_column(String(100), unique=True)
     display_name: Mapped[str] = mapped_column(String(100))
     password_hash: Mapped[str] = mapped_column(String(512))
-    role: Mapped[UserRole] = mapped_column(Enum(UserRole, native_enum=False, length=20))
+    role: Mapped[UserRole] = mapped_column(
+        Enum(
+            UserRole,
+            native_enum=False,
+            length=20,
+            values_callable=_enum_values,
+        )
+    )
     status: Mapped[AccountStatus] = mapped_column(
-        Enum(AccountStatus, native_enum=False, length=20), default=AccountStatus.ACTIVE
+        Enum(
+            AccountStatus,
+            native_enum=False,
+            length=20,
+            values_callable=_enum_values,
+        ),
+        default=AccountStatus.ACTIVE,
     )
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

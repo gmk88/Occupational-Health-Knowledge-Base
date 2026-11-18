@@ -42,7 +42,7 @@ if not errorlevel 1 (
 )
 
 echo 使用配置文件启动：%CFG%
-echo 公网 MCP 地址：https://kb.guanmingkun.ltd/mcp/
+echo 公网 MCP 地址：https://你的域名/mcp/
 cloudflared tunnel --config "%CFG%" run
 
 endlocal
