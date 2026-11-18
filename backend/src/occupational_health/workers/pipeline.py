@@ -76,12 +76,12 @@ def _is_pdf(path: Path) -> bool:
 def _embedding_text(chunk: Chunk, max_tokens: int) -> str:
     """Cap the embedding input of huge tables; the stored text stays complete."""
     if chunk.block_type != "table":
-        return chunk.masked_text
-    if approximate_token_count(chunk.masked_text) <= max_tokens:
-        return chunk.masked_text
+        return chunk.raw_text
+    if approximate_token_count(chunk.raw_text) <= max_tokens:
+        return chunk.raw_text
     kept: list[str] = []
     total = 0
-    for line in chunk.masked_text.splitlines():
+    for line in chunk.raw_text.splitlines():
         cost = approximate_token_count(line)
         if kept and total + cost > max_tokens:
             break
@@ -598,7 +598,7 @@ def _embed_and_publish(job, document, settings, indexer: QdrantIndexer, db) -> N
                             "parent_chunk_id": chunk.parent_chunk_id,
                             "table_id": chunk.table_id,
                             "section_title": chunk.section_title,
-                            "masked_text": chunk.masked_text,
+                            "masked_text": chunk.raw_text,
                             "raw_text": chunk.raw_text,
                         },
                     }

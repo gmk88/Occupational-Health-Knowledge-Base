@@ -73,7 +73,7 @@ def visible_chunks(chunk_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict]:
             document = documents.get(chunk.document_id)
             current = versions.get(document.current_version_id)
             visible[chunk.id] = {
-                "text": chunk.masked_text,
+                "text": chunk.raw_text,
                 "raw_text": chunk.raw_text,
                 "document_id": chunk.document_id,
                 "version_number": current.version_number,

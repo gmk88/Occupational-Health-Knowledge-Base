@@ -15,6 +15,31 @@ OCR_CORRECTIONS = {
     "检测误%F.S.)": "检测误差(%F.S.)",
 }
 
+# 只对已从标准原图核对过的缺失字符做定点修复。
+# 这些 Unicode 替换符来自 PDF 字体编码缺字，重新解析同一 PDF 不会自行恢复。
+OCR_REPLACEMENT_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\ufffd\s*——\s*喷头雾化角"), "θ ——喷头雾化角"),
+    (re.compile(r"流量偏差\s*%\s*=\s*\ufffd\s*[−-]\s*\ufffd0\s*×\s*100\s*\n\s*\ufffd0"),
+     "流量偏差(%) = (M−M₀) × 100 / M₀"),
+    (re.compile(r"C\s*=\s*\ufffd\s*[−-]\s*\ufffd0\s*\n\s*\ufffd0\s*×\s*\ufffd\s*×\s*\ufffd"),
+     "C = (C−C₀)/(V₀ × D × K)"),
+    (re.compile(r"\ufffd\s*=\s*\ufffd2\s*[−-]\s*\ufffd1\s*\n\s*\ufffd0\s*×\s*106"),
+     "C = (m₂−m₁) × 10⁶ / V₀"),
+    (re.compile(r"□\ufffd\s*=\s*\ufffd2\s*[−-]\s*\ufffd1\s*×\s*100\s*\n\s*\ufffd"),
+     "□C = (m₃−m₁) × 100 / m"),
+    (re.compile(r"□\ufffd\s*=\s*\ufffd2\s*[−-]\s*\ufffd3\s*×\s*100\s*\n\s*\ufffd"),
+     "□C = (m₂−m₃) × 100 / m"),
+    (re.compile(r"平均值\ufffd\s*和\s*标准偏差"), r"平均值 $\bar{X}$ 和标准偏差"),
+    (re.compile(r"\ufffd\ufffd标准偏差"), r"$\bar{X}$ 标准偏差"),
+    (re.compile(r"\ufffd\ufffd\s*=\s*\n\s*1"), r"$\bar{X}$ =\n1"),
+    (re.compile(r"\ufffd\ufffd\s*[−-]\s*\ufffd\ufffd"), r"$\bar{X}$ − $\bar{X}$"),
+    (re.compile(r"\$X _ \{ \\boldsymbol \{ \\theta \} \} \\bar \{ \}\$\s*本底检测结果"),
+     r"$X_0$ 本底检测结果"),
+    (re.compile(r"\ufffd——平均值"), r"$\bar{X}$——平均值"),
+    (re.compile(r"\ufffd\s*——\s*平均值"), r"$\bar{X}$ ——平均值"),
+)
+
+
 
 def normalize_whitespace(text: str) -> str:
     return re.sub(r"[ \t]+", " ", text).strip()
@@ -84,9 +109,11 @@ def _looks_continuation(line: str) -> bool:
 def correct_ocr_text(text: str | None) -> str | None:
     if not text:
         return text
-    corrected = text
+    corrected = text.replace("\x00", "")
     for wrong, correct in OCR_CORRECTIONS.items():
         corrected = corrected.replace(wrong, correct)
+    for pattern, replacement in OCR_REPLACEMENT_PATTERNS:
+        corrected = pattern.sub(lambda _match, value=replacement: value, corrected)
     return corrected
 
 

@@ -209,8 +209,8 @@ class ChunkReviewService:
     def get_chunk(self, chunk_id: uuid.UUID) -> dict:
         """Published chunk lookup for external callers (MCP tools).
 
-        Only masked text is exposed: external agents never need the raw
-        pre-masking content.
+        The knowledge base publishes standards and regulations, so external
+        callers receive the parsed source text unchanged.
         """
         with SessionLocal() as db:
             chunk = db.get(Chunk, chunk_id)
@@ -222,7 +222,7 @@ class ChunkReviewService:
                     raise ApiError(404, "NOT_FOUND", "切分块不存在或尚未入库")
             data = _chunk_dict(chunk)
             data.pop("raw_text", None)
-            data["text"] = chunk.masked_text
+            data["text"] = chunk.raw_text
             document = db.get(Document, chunk.document_id)
             version = (
                 db.get(DocumentVersion, document.current_version_id)

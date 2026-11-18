@@ -2,14 +2,14 @@ from occupational_health.services.masking.rules import apply_spans, detect_spans
 from occupational_health.services.masking.service import mask_text
 
 
-def test_detect_and_mask_id_and_phone_and_name() -> None:
+def test_published_text_is_not_masked() -> None:
     text = "姓名：张三，身份证号110101199001011234，电话13800138000"
     masked, annotations, _ = mask_text(text)
-    assert "张三" not in masked
-    assert "110101199001011234" not in masked
-    assert "13800138000" not in masked
-    assert "[姓名]" in masked and "[身份证号]" in masked and "[联系方式]" in masked
-    assert annotations[0]["start_offset"] < annotations[0]["end_offset"]
+    assert masked == text
+    assert "张三" in masked
+    assert "110101199001011234" in masked
+    assert "13800138000" in masked
+    assert annotations == []
 
 
 def test_overlapping_spans_are_deduplicated() -> None:

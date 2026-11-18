@@ -6,7 +6,7 @@ info:
     PDF 文档、异步任务、混合检索、版本、质量与权限接口。
     所有 JSON 响应使用 `{code, message, data, request_id}` 信封。
     网页使用安全会话 Cookie，外部系统使用 Bearer API Key。
-    普通使用者只能获得脱敏内容；`view=raw` 和管理操作仅限管理员。
+    检索与文档文本接口统一返回标准原文，不做隐私脱敏。
     破坏性变更通过新的基础路径版本提供。
 servers:
   - url: /api/v1
@@ -349,11 +349,11 @@ paths:
             minimum: 1
         - name: view
           in: query
-          description: raw 仅管理员可用并记录审计
+          description: 兼容旧参数；当前仅返回 raw 原文
           schema:
             type: string
-            enum: [masked, raw]
-            default: masked
+            enum: [raw]
+            default: raw
       responses:
         '200':
           description: 页面提取文本与定位信息
@@ -647,7 +647,7 @@ paths:
       tags: [Search]
       operationId: searchKnowledgeBase
       summary: 语义、BM25 关键词或 RRF 混合检索
-      description: 管理员可使用 include_raw=true 同时检索原文与脱敏关键词字段并记录审计；普通使用者该值必须为 false。
+      description: 检索结果统一返回标准原文；include_raw 为兼容旧客户端保留。
       requestBody:
         required: true
         content:
@@ -1427,7 +1427,7 @@ components:
           enum: [text_layer, ocr, mixed]
         view:
           type: string
-          enum: [masked, raw]
+          enum: [raw]
         text:
           type: string
         spans:
@@ -1590,7 +1590,7 @@ components:
         include_raw:
           type: boolean
           default: false
-          description: 仅管理员可设为 true；操作写入审计
+          description: 兼容旧参数；当前检索结果始终为标准原文
         rrf_k:
           type: integer
           minimum: 1
@@ -1612,7 +1612,7 @@ components:
           description: 命中子块 ID；父块展开时用于追溯
         text:
           type: string
-          description: 当前角色被授权查看的脱敏或原文片段
+          description: 标准原文片段
         document_id:
           type: string
           format: uuid

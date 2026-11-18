@@ -18,7 +18,10 @@ class KeywordRetriever:
         include_raw: bool = False,
     ) -> list[tuple[str, float]]:
         combined: dict[str, float] = {}
-        for field in ("masked_text", *(["raw_text"] if include_raw else [])):
+        fields = ["raw_text"]
+        if include_raw and "masked_text" not in fields:
+            fields.append("masked_text")
+        for field in fields:
             result = self.qdrant.query_points(
                 collection_name=COLLECTION,
                 query=models.TextQuery(text=query),

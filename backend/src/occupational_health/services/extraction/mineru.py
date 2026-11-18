@@ -23,6 +23,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 
+from occupational_health.services.extraction.cleaning import correct_ocr_text
 from occupational_health.services.extraction.table_html import (
     merge_rows,
     parse_html_table,
@@ -289,15 +290,21 @@ class MineruAdapter:
                     sequence += 1
                     segment = _table_segment(block, page_number, sequence, namespace)
                     if segment is not None:
+                        segment = replace(
+                            segment,
+                            text=correct_ocr_text(segment.text),
+                            header=correct_ocr_text(segment.header),
+                            html=correct_ocr_text(segment.html),
+                        )
                         segments.append(segment)
                     continue
                 if kind in _FORMULA_BLOCK_TYPES:
                     flush_prose()
-                    formula = _block_text(block)
+                    formula = correct_ocr_text(_block_text(block))
                     if formula:
                         segments.append(TableSegment("formula", formula))
                     continue
-                text = _block_text(block)
+                text = correct_ocr_text(_block_text(block))
                 if text:
                     prose.append(text)
             flush_prose()

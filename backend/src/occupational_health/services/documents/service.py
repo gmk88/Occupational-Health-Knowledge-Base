@@ -689,18 +689,20 @@ class DocumentService:
                 raise ApiError(404, "NOT_FOUND", "文档尚未处理完成")
             page = db.scalar(
                 select(Page).where(
-                    Page.version_id == version.id, Page.page_number == page_number
+                    Page.version_id == version.id,
+                    Page.pipeline_revision == document.active_pipeline_revision,
+                    Page.page_number == page_number,
                 )
             )
             if not page:
                 raise ApiError(404, "NOT_FOUND", "页面不存在")
-            text = page.masked_text if not raw else page.cleaned_text
+            text = page.cleaned_text
             return {
                 "document_id": str(document_id),
                 "version_number": version.version_number,
                 "page_number": page.page_number,
                 "source_type": page.source_type.value,
-                "view": "raw" if raw else "masked",
+                "view": "raw",
                 "text": text,
                 "spans": [],
                 "quality_warnings": page.layout_warning_codes,
