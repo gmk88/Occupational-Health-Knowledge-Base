@@ -33,6 +33,13 @@ pipeline = [
   "onnxruntime>=1.19,<2",
   "sentence-transformers>=3,<6",
 ]
+eval = [
+  "ragas>=0.2,<1",
+  "datasets>=3,<4",
+  "pandas>=2,<3",
+  "openai>=1,<2",
+  "langchain-openai>=0.2,<1",
+]
 dev = [
   "pytest>=8.3,<10",
   "pytest-asyncio>=0.24,<2",
@@ -48,6 +55,7 @@ oh-api = "occupational_health.api.main:run"
 oh-api-client = "occupational_health.services.api_clients.cli:main"
 oh-demo = "occupational_health.demo:run_demo"
 oh-mcp = "occupational_health.mcp.server:main"
+oh-eval = "occupational_health.eval.run_eval:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/occupational_health"]

@@ -25,6 +25,7 @@ from occupational_health.services.chunking.service import (
     build_children_from_parents,
 )
 from occupational_health.services.extraction.table_html import parse_html_table
+from occupational_health.services.retrieval.anchors import rebuild_chunk_anchors
 
 logger = logging.getLogger(__name__)
 
@@ -253,6 +254,7 @@ class ChunkReviewService:
             chunk.content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
             chunk.is_edited = True
             chunk.updated_at = utcnow()
+            rebuild_chunk_anchors(db, chunk)
             db.commit()
             return _chunk_dict(chunk)
 
@@ -313,6 +315,7 @@ class ChunkReviewService:
             head.is_edited = True
             head.updated_at = utcnow()
             _refresh_text_metrics(head)
+            rebuild_chunk_anchors(db, head)
 
             for chunk in chunks[1:]:
                 db.execute(
@@ -335,43 +338,47 @@ class ChunkReviewService:
                 )
             db.delete(chunk)
             db.flush()
+            restored: list[Chunk] = []
             for offset, entry in enumerate(snapshot):
                 text = entry.get("raw_text") or ""
-                db.add(
-                    Chunk(
-                        id=uuid.uuid4(),
-                        document_id=chunk.document_id,
-                        version_id=chunk.version_id,
-                        pipeline_revision=chunk.pipeline_revision,
-                        chunker_version=chunk.chunker_version,
-                        # 合并块已删除，快照序号此刻必然空闲，可直接还原。
-                        ordinal=entry.get("ordinal", offset),
-                        page_start=entry.get("page_start") or 1,
-                        page_end=entry.get("page_end") or 1,
-                        source_types=entry.get("source_types") or [],
-                        raw_text=text,
-                        masked_text=entry.get("masked_text") or text,
-                        block_type=entry.get("block_type") or "text",
-                        table_header=entry.get("table_header"),
-                        table_id=entry.get("table_id"),
-                        source_table_id=entry.get("source_table_id"),
-                        section_title=entry.get("section_title"),
-                        table_html=entry.get("table_html"),
-                        merged_snapshot=None,
-                        is_edited=entry.get("is_edited", False),
-                        token_count=entry.get("token_count")
-                        or approximate_token_count(text),
-                        content_hash=entry.get("content_hash")
-                        or hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                        chunk_role=entry.get("chunk_role") or chunk.chunk_role,
-                        parent_chunk_id=None,
-                        page_offsets=entry.get("page_offsets") or {},
-                        embedding_model=chunk.embedding_model,
-                        embedding_revision=chunk.embedding_revision,
-                        embedding_dimensions=chunk.embedding_dimensions,
-                        index_visible=False,
-                    )
+                restored_chunk = Chunk(
+                    id=uuid.uuid4(),
+                    document_id=chunk.document_id,
+                    version_id=chunk.version_id,
+                    pipeline_revision=chunk.pipeline_revision,
+                    chunker_version=chunk.chunker_version,
+                    # 合并块已删除，快照序号此刻必然空闲，可直接还原。
+                    ordinal=entry.get("ordinal", offset),
+                    page_start=entry.get("page_start") or 1,
+                    page_end=entry.get("page_end") or 1,
+                    source_types=entry.get("source_types") or [],
+                    raw_text=text,
+                    masked_text=entry.get("masked_text") or text,
+                    block_type=entry.get("block_type") or "text",
+                    table_header=entry.get("table_header"),
+                    table_id=entry.get("table_id"),
+                    source_table_id=entry.get("source_table_id"),
+                    section_title=entry.get("section_title"),
+                    table_html=entry.get("table_html"),
+                    merged_snapshot=None,
+                    is_edited=entry.get("is_edited", False),
+                    token_count=entry.get("token_count")
+                    or approximate_token_count(text),
+                    content_hash=entry.get("content_hash")
+                    or hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                    chunk_role=entry.get("chunk_role") or chunk.chunk_role,
+                    parent_chunk_id=None,
+                    page_offsets=entry.get("page_offsets") or {},
+                    embedding_model=chunk.embedding_model,
+                    embedding_revision=chunk.embedding_revision,
+                    embedding_dimensions=chunk.embedding_dimensions,
+                    index_visible=False,
                 )
+                db.add(restored_chunk)
+                restored.append(restored_chunk)
+            db.flush()
+            for restored_chunk in restored:
+                rebuild_chunk_anchors(db, restored_chunk)
             db.commit()
             return {"items": [_chunk_dict(row) for row in _job_chunks(db, job)]}
 

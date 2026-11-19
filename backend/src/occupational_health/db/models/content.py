@@ -149,3 +149,41 @@ class Chunk(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class ChunkAnchor(Base):
+    """Locates a chunk inside the cleaned text of its source page."""
+
+    __tablename__ = "chunk_anchors"
+    __table_args__ = (
+        UniqueConstraint(
+            "chunk_id",
+            "page_number",
+            "start_offset",
+            "end_offset",
+            "anchor_type",
+            name="uq_chunk_anchor",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    chunk_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("chunks.id", ondelete="CASCADE"), index=True
+    )
+    version_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    pipeline_revision: Mapped[uuid.UUID] = mapped_column(index=True)
+    page_number: Mapped[int] = mapped_column(Integer)
+    start_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    end_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    quote: Mapped[str] = mapped_column(Text, default="")
+    quote_hash: Mapped[str] = mapped_column(String(64), index=True)
+    anchor_type: Mapped[str] = mapped_column(String(30), default="text", index=True)
+    match_method: Mapped[str] = mapped_column(String(30), default="exact")
+    confidence: Mapped[float] = mapped_column(Numeric(4, 3), default=1)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )

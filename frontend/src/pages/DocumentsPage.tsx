@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
-import { getQualityReport, listDocuments, type Document, type QualityReport as Quality } from '../services/documents';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  getDocument,
+  getQualityReport,
+  listDocuments,
+  type Document,
+  type QualityReport as Quality,
+} from '../services/documents';
 import { DocumentDetail } from '../features/documents/DocumentDetail';
 import { PagePreview } from '../features/documents/PagePreview';
 import { QualityReport as QualityReportView } from '../features/documents/QualityReport';
@@ -46,6 +52,8 @@ export function DocumentsPage() {
   const [report, setReport] = useState<Quality | null>(null);
   const [reportError, setReportError] = useState(false);
   const [tab, setTab] = useState<Tab>('detail');
+  const [focus, setFocus] = useState<{ page: number; chunkId?: string } | null>(null);
+  const focusApplied = useRef('');
 
   const refresh = useCallback(async () => {
     const response = await listDocuments({ page, status: status || undefined });
@@ -58,6 +66,35 @@ export function DocumentsPage() {
     const id = window.setTimeout(() => { void refresh().catch(() => {}); }, 0);
     return () => window.clearTimeout(id);
   }, [refresh]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const documentId = params.get('document');
+    if (!documentId || focusApplied.current === documentId) return;
+    focusApplied.current = documentId;
+    const page = Number(params.get('page')) || 1;
+    const chunkId = params.get('chunkId') || undefined;
+    setFocus({ page, chunkId });
+    const activate = async (document: Document) => {
+      setSelected(document);
+      setTab('preview');
+      setReport(null);
+      setReportError(false);
+      try {
+        setReport((await getQualityReport(document.id)).data);
+      } catch {
+        setReportError(true);
+      }
+    };
+    const fromList = documents.find((item) => item.id === documentId);
+    if (fromList) {
+      void activate(fromList);
+    } else {
+      void getDocument(documentId)
+        .then((response) => activate(response.data))
+        .catch(() => setReportError(true));
+    }
+  }, [documents]);
 
   // 只在布尔值变化时重建定时器；15 秒一次并在页面隐藏时暂停，
   // 失败按 15/30/60 秒退避，避免处理期间持续打满限流额度。
@@ -103,6 +140,7 @@ export function DocumentsPage() {
   async function open(document: Document) {
     setSelected(document);
     setTab('detail');
+    setFocus(null);
     setReport(null);
     setReportError(false);
     try {
@@ -116,6 +154,7 @@ export function DocumentsPage() {
     setSelected(null);
     setReport(null);
     setReportError(false);
+    setFocus(null);
   }
 
   return (
@@ -226,7 +265,12 @@ export function DocumentsPage() {
               )}
               {tab === 'preview' && (
                 report ? (
-                  <PagePreview documentId={selected.id} pageCount={report.page_count} />
+                  <PagePreview
+                    documentId={selected.id}
+                    pageCount={report.page_count}
+                    initialPage={focus?.page}
+                    chunkId={focus?.chunkId}
+                  />
                 ) : (
                   <p className="hint">{reportError ? '暂无页面可预览。' : '加载中…'}</p>
                 )

@@ -54,6 +54,7 @@ from occupational_health.services.indexing.publisher import (
 )
 from occupational_health.services.indexing.qdrant import QdrantIndexer
 from occupational_health.services.masking.service import mask_text
+from occupational_health.services.retrieval.anchors import rebuild_chunk_anchors
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -425,6 +426,10 @@ def _process(job_id: uuid.UUID, file_path: Path, settings, indexer: QdrantIndexe
             )
             db.add(chunk)
             chunks.append(chunk)
+
+        db.flush()
+        for chunk in chunks:
+            rebuild_chunk_anchors(db, chunk)
 
         semantic_chunks = [
             chunk for chunk in chunks if chunk.chunk_role != ChunkRole.CHILD.value

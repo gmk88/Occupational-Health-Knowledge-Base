@@ -1,0 +1,18 @@
+# Cloudflare Tunnel —— 只把 MCP 端点暴露到公网
+#
+# 使用方法：
+#   cloudflared tunnel login
+#   cloudflared tunnel create oh-kb
+#   cloudflared tunnel route dns oh-kb kb.guanmingkun.ltd
+#
+# 复制本文件为 config.yml，并把 REPLACE_WITH_TUNNEL_ID 替换为实际 tunnel UUID。
+# config.yml 含本机凭据路径，已加入 .gitignore，不应提交到公开仓库。
+
+tunnel: REPLACE_WITH_TUNNEL_ID
+credentials-file: C:\Users\ASUS\.cloudflared\REPLACE_WITH_TUNNEL_ID.json
+
+ingress:
+  - hostname: kb.guanmingkun.ltd
+    path: ^/mcp(/.*)?$
+    service: http://127.0.0.1:8000
+  - service: http_status:404

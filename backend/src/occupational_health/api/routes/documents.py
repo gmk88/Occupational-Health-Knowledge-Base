@@ -280,18 +280,39 @@ def link_relation(
     )
 
 
+@router.get("/{document_id}/chunks/{chunk_id}/anchors")
+def get_chunk_anchors(
+    request: Request,
+    document_id: str,
+    chunk_id: str,
+    _principal: PrincipalData = Depends(require_user),
+) -> dict:
+    return success(
+        _service(request).get_chunk_anchors(
+            uuid.UUID(document_id), uuid.UUID(chunk_id)
+        )
+    )
+
+
 @router.get("/{document_id}/pages/{page_number}")
 def get_page(
     request: Request,
     document_id: str,
     page_number: int,
-    view: str = "masked",
-    principal: PrincipalData = Depends(require_user),
+    view: str = "raw",
+    chunk_id: str | None = Query(default=None),
+    include_anchors: bool = Query(default=False),
+    _principal: PrincipalData = Depends(require_user),
 ) -> dict:
-    raw = view == "raw"
-    if raw and principal.role != UserRole.ADMIN:
-        raise ApiError(403, "FORBIDDEN", "原文仅管理员可查看")
-    return success(_service(request).get_page(uuid.UUID(document_id), page_number, raw))
+    return success(
+        _service(request).get_page(
+            uuid.UUID(document_id),
+            page_number,
+            True,
+            uuid.UUID(chunk_id) if chunk_id else None,
+            include_anchors,
+        )
+    )
 
 
 @router.get("/{document_id}/quality-report")

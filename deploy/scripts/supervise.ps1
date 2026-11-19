@@ -70,7 +70,10 @@ switch ($Service) {
             $Executable = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
         }
         if (-not $Executable) { throw '未找到 cloudflared，请先安装或加入 PATH' }
-        $config = Join-Path $Root 'deploy\cloudflared\config.yml'
+        $config = Join-Path $Root 'var\cloudflared\config.yml'
+        if (-not (Test-Path $config)) {
+            $config = Join-Path $Root 'deploy\cloudflared\config.yml'
+        }
         if (-not (Test-Path $config)) { throw "缺少隧道配置：$config" }
         $serviceArgs = @('tunnel', '--config', $config, 'run')
         $WorkingDirectory = $Root

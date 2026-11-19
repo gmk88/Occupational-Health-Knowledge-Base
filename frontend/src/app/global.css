@@ -2023,6 +2023,28 @@ body {
   border-radius: 12px;
 }
 
+.source-anchor {
+  padding: 1px 2px;
+  border-radius: 4px;
+  background: rgba(255, 196, 0, 0.42);
+  color: inherit;
+  box-shadow: 0 0 0 1px rgba(176, 118, 0, 0.35);
+}
+
+.anchor-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card-muted);
+}
+
+.anchor-list p {
+  margin: 0;
+}
+
 .pagination {
   margin-top: 18px;
   padding-top: 18px;

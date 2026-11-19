@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from occupational_health.core.errors import ApiError
-from occupational_health.db.models.content import Page
+from occupational_health.db.models.content import Chunk, ChunkAnchor, Page
 from occupational_health.db.models.documents import (
     Document,
     DocumentFingerprint,
@@ -675,7 +675,14 @@ class DocumentService:
             db.commit()
             return self._document_dict(db, document)
 
-    def get_page(self, document_id: uuid.UUID, page_number: int, raw: bool) -> dict:
+    def get_page(
+        self,
+        document_id: uuid.UUID,
+        page_number: int,
+        raw: bool,
+        chunk_id: uuid.UUID | None = None,
+        include_anchors: bool = False,
+    ) -> dict:
         with SessionLocal() as db:
             document = db.get(Document, document_id)
             if not document or document.status == DocumentStatus.DELETED:
@@ -697,6 +704,31 @@ class DocumentService:
             if not page:
                 raise ApiError(404, "NOT_FOUND", "页面不存在")
             text = page.cleaned_text
+            anchors: list[dict] = []
+            if include_anchors or chunk_id:
+                statement = select(ChunkAnchor).where(
+                    ChunkAnchor.version_id == version.id,
+                    ChunkAnchor.pipeline_revision == document.active_pipeline_revision,
+                    ChunkAnchor.page_number == page_number,
+                )
+                if chunk_id:
+                    statement = statement.where(ChunkAnchor.chunk_id == chunk_id)
+                for anchor in db.scalars(statement.order_by(ChunkAnchor.id)).all():
+                    confidence = anchor.confidence
+                    if hasattr(confidence, "as_tuple"):
+                        confidence = float(confidence)
+                    anchors.append(
+                        {
+                            "chunk_id": str(anchor.chunk_id),
+                            "start_offset": anchor.start_offset,
+                            "end_offset": anchor.end_offset,
+                            "quote": anchor.quote,
+                            "anchor_type": anchor.anchor_type,
+                            "match_method": anchor.match_method,
+                            "confidence": confidence,
+                            "status": anchor.status,
+                        }
+                    )
             return {
                 "document_id": str(document_id),
                 "version_number": version.version_number,
@@ -706,6 +738,55 @@ class DocumentService:
                 "text": text,
                 "spans": [],
                 "quality_warnings": page.layout_warning_codes,
+                "anchors": anchors,
+                "highlights": [
+                    anchor
+                    for anchor in anchors
+                    if anchor["start_offset"] is not None
+                    and anchor["end_offset"] is not None
+                ],
+            }
+
+    def get_chunk_anchors(
+        self, document_id: uuid.UUID, chunk_id: uuid.UUID
+    ) -> dict:
+        with SessionLocal() as db:
+            document = db.get(Document, document_id)
+            chunk = db.get(Chunk, chunk_id)
+            if (
+                not document
+                or document.status == DocumentStatus.DELETED
+                or not chunk
+                or chunk.document_id != document_id
+            ):
+                raise ApiError(404, "NOT_FOUND", "切分块不存在")
+            anchors = []
+            statement = (
+                select(ChunkAnchor)
+                .where(ChunkAnchor.chunk_id == chunk_id)
+                .order_by(ChunkAnchor.page_number, ChunkAnchor.id)
+            )
+            for anchor in db.scalars(statement).all():
+                confidence = anchor.confidence
+                if hasattr(confidence, "as_tuple"):
+                    confidence = float(confidence)
+                anchors.append(
+                    {
+                        "chunk_id": str(anchor.chunk_id),
+                        "page_number": anchor.page_number,
+                        "start_offset": anchor.start_offset,
+                        "end_offset": anchor.end_offset,
+                        "quote": anchor.quote,
+                        "anchor_type": anchor.anchor_type,
+                        "match_method": anchor.match_method,
+                        "confidence": confidence,
+                        "status": anchor.status,
+                    }
+                )
+            return {
+                "document_id": str(document_id),
+                "chunk_id": str(chunk_id),
+                "anchors": anchors,
             }
 
     def get_quality_report(self, document_id: uuid.UUID) -> dict:

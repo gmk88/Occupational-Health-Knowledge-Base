@@ -38,16 +38,20 @@ class FakeDocumentService:
     def update_metadata(self, document_id, title, category_id, tags, source, notes):
         return self.get_document(document_id)
 
-    def get_page(self, document_id, page_number, raw):
+    def get_page(
+        self, document_id, page_number, raw, chunk_id=None, include_anchors=False
+    ):
         return {
             "document_id": str(document_id),
             "version_number": 1,
             "page_number": page_number,
             "source_type": "text_layer",
-            "view": "raw" if raw else "masked",
-            "text": "脱敏正文" if not raw else "原文",
+            "view": "raw",
+            "text": "原文",
             "spans": [],
             "quality_warnings": [],
+            "anchors": [],
+            "highlights": [],
         }
 
     def get_quality_report(self, document_id):
@@ -165,13 +169,13 @@ def test_document_and_quality_and_page_endpoints(client) -> None:
     )
 
 
-def test_raw_page_is_admin_only(client) -> None:
+def test_page_text_is_available_for_source_tracing(client) -> None:
     login(client, "viewer", "correct-horse-viewer")
     document_id = str(uuid.uuid4())
-    assert (
-        client.get(f"/api/v1/documents/{document_id}/pages/1?view=raw").status_code
-        == 403
-    )
+    response = client.get(f"/api/v1/documents/{document_id}/pages/1?view=raw")
+    assert response.status_code == 200
+    assert response.json()["data"]["view"] == "raw"
+    assert "anchors" in response.json()["data"]
 
 
 def test_taxonomy_and_jobs_envelopes(client) -> None:

@@ -41,6 +41,7 @@ class SearchResult(BaseModel):
     standard_no: str | None = None
     related_documents: list[dict] = []
     amendment_notice: str | None = None
+    source_location: dict | None = None
     scores: dict
     recall_sources: list[str]
     highlights: list[dict]

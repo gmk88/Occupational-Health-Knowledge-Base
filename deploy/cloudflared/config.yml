@@ -1,22 +1,12 @@
 # Cloudflare Tunnel —— 只把 MCP 端点暴露到公网
 #
-# 前提：guanmingkun.ltd 已接入 Cloudflare。
-# 当前 NS 仍指向 hichina.com，需先在注册商处把 NS 改为 Cloudflare 提供的两个地址。
-#
-# 一次性准备：
+# 使用方法：
 #   cloudflared tunnel login
 #   cloudflared tunnel create oh-kb
 #   cloudflared tunnel route dns oh-kb kb.guanmingkun.ltd
 #
-# 然后把下面 3 处占位符换成实际值：
-#   REPLACE_WITH_TUNNEL_ID   -> cloudflared tunnel create 输出的 UUID
-#   kb.guanmingkun.ltd      -> kb.guanmingkun.ltd，例如 kb.guanmingkun.ltd
-#   credentials-file         -> C:\Users\ASUS\.cloudflared\<UUID>.json
-#
-# 启动：双击项目根目录的「启动公网访问.bat」，或执行：
-#   cloudflared tunnel --config deploy\cloudflared\config.yml run
-#
-# 注意：path 规则只放行 /mcp，管理后台、OpenAPI、静态页面都不会暴露到公网。
+# 复制本文件为 var/cloudflared/config.yml，并把 REPLACE_WITH_TUNNEL_ID 替换为实际 tunnel UUID。
+# var/ 已被 .gitignore 忽略，不应提交到公开仓库。
 
 tunnel: REPLACE_WITH_TUNNEL_ID
 credentials-file: C:\Users\ASUS\.cloudflared\REPLACE_WITH_TUNNEL_ID.json

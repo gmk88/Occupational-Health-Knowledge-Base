@@ -14,9 +14,14 @@ export interface QualityReport {
   chunk_count: number; ocr_page_ratio: number; average_ocr_confidence: number | null; noise_char_count: number;
   low_quality_pages: number[]; failed_pages: unknown[]; processing_duration_ms: number; created_at: string;
 }
+export interface PageAnchor {
+  chunk_id: string; page_number: number; start_offset: number | null; end_offset: number | null; quote: string;
+  anchor_type: string; match_method: string; confidence: number; status: string;
+}
 export interface PageText {
   document_id: string; version_number: number; page_number: number; source_type: string; view: 'masked' | 'raw';
   text: string; spans: unknown[]; quality_warnings: string[];
+  anchors: PageAnchor[]; highlights: PageAnchor[];
 }
 export interface Limits { max_file_size_bytes: number; max_pages_per_file: number; max_files_per_web_batch: number; upload_limit_per_minute: number }
 
@@ -28,8 +33,18 @@ export async function listDocuments(params: { page?: number; page_size?: number;
 
 export async function getDocument(id: string) { return api<Document>(`/documents/${id}`); }
 export async function getQualityReport(id: string) { return api<QualityReport>(`/documents/${id}/quality-report`); }
-export async function getPage(id: string, pageNumber: number, view: 'masked' | 'raw' = 'masked') {
-  return api<PageText>(`/documents/${id}/pages/${pageNumber}?view=${view}`);
+export async function getPage(
+  id: string,
+  pageNumber: number,
+  view: 'masked' | 'raw' = 'raw',
+  chunkId?: string,
+) {
+  const query = new URLSearchParams({ view });
+  if (chunkId) {
+    query.set('chunk_id', chunkId);
+    query.set('include_anchors', 'true');
+  }
+  return api<PageText>(`/documents/${id}/pages/${pageNumber}?${query.toString()}`);
 }
 export async function getLimits() { return api<Limits>('/system/limits'); }
 

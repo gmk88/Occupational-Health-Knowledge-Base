@@ -354,6 +354,18 @@ paths:
             type: string
             enum: [raw]
             default: raw
+        - name: chunk_id
+          in: query
+          description: 只返回指定切分块的原文锚点
+          schema:
+            type: string
+            format: uuid
+        - name: include_anchors
+          in: query
+          description: 返回页面内所有原文锚点
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
           description: 页面提取文本与定位信息
@@ -1452,6 +1464,60 @@ components:
           type: array
           items:
             type: string
+        anchors:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceAnchor'
+        highlights:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceAnchor'
+    SourceAnchor:
+      type: object
+      required: [page_number, quote, anchor_type, match_method, confidence, status]
+      properties:
+        chunk_id:
+          type: string
+          format: uuid
+        page_number:
+          type: integer
+          minimum: 1
+        start_offset:
+          type: integer
+          nullable: true
+        end_offset:
+          type: integer
+          nullable: true
+        quote:
+          type: string
+        anchor_type:
+          type: string
+          enum: [text, table_row, formula, page_only]
+        match_method:
+          type: string
+          enum: [exact, normalized_exact, fuzzy, table_index, formula_block, page_fallback]
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        status:
+          type: string
+          enum: [active, page_only, stale]
+    SourceLocation:
+      type: object
+      properties:
+        chunk_id:
+          type: string
+          format: uuid
+        display_chunk_id:
+          type: string
+          format: uuid
+        primary:
+          $ref: '#/components/schemas/SourceAnchor'
+        anchors:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceAnchor'
     PageTextResponse:
       allOf:
         - $ref: '#/components/schemas/SuccessEnvelope'
@@ -1634,6 +1700,8 @@ components:
         amendment_notice:
           type: string
           nullable: true
+        source_location:
+          $ref: '#/components/schemas/SourceLocation'
         page_start:
           type: integer
           minimum: 1

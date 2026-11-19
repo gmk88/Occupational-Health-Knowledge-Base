@@ -16,12 +16,30 @@ export interface TableInfo {
   row_range?: [number, number];
   rows: TableCell[][];
 }
+export interface SourceAnchor {
+  chunk_id?: string;
+  page_number: number;
+  start_offset: number | null;
+  end_offset: number | null;
+  quote: string;
+  anchor_type: string;
+  match_method: string;
+  confidence: number;
+  status: string;
+}
+export interface SourceLocation {
+  chunk_id: string;
+  display_chunk_id: string;
+  primary: SourceAnchor | null;
+  anchors: SourceAnchor[];
+}
 export interface SearchResult {
   chunk_id: string; matched_chunk_id?: string | null; text: string; document_id: string; document_name: string; version_number: number;
   page_start: number; page_end: number; category: Category | null; tags: Tag[];
   lifecycle_status: string; document_role: string; standard_no?: string | null;
   related_documents?: { document_id: string; title: string; relation_type: string; volume_no?: string | null }[];
   amendment_notice?: string | null;
+  source_location?: SourceLocation | null;
   scores: { semantic?: number | null; keyword?: number | null; rrf: number };
   recall_sources: string[]; highlights: { start_offset: number; end_offset: number }[];
   kind: 'chunk' | 'table';

@@ -15,6 +15,7 @@ from occupational_health.db.models.taxonomy import (
     Tag,
 )
 from occupational_health.db.session import SessionLocal
+from occupational_health.services.retrieval.anchors import anchors_payload
 from occupational_health.services.retrieval.fusion import reciprocal_rank_fusion
 from occupational_health.services.retrieval.highlights import find_highlights
 from occupational_health.services.retrieval.terms import extract_exact_terms
@@ -136,6 +137,10 @@ class RetrievalService:
                 for item in [*visible.values(), *parents.values()]
             }
         )
+        with SessionLocal() as db:
+            anchor_map = anchors_payload(
+                db, [uuid.UUID(chunk_id) for chunk_id, _ in fused]
+            )
         terms = (
             extract_exact_terms(query)
             or [token for token in query.split() if len(token) >= 2][:8]
@@ -160,6 +165,10 @@ class RetrievalService:
             seen_targets.add(target_id)
             text = record["raw_text"] if include_raw else record["text"]
             context = contexts.get(record["document_id"], {})
+            matched_anchors = anchor_map.get(str(child_id)) or anchor_map.get(
+                str(target_id), []
+            )
+            primary_anchor = matched_anchors[0] if matched_anchors else None
             common = {
                 "chunk_id": str(target_id),
                 "matched_chunk_id": str(child_id),
@@ -176,6 +185,12 @@ class RetrievalService:
                 "standard_no": context.get("standard_no"),
                 "related_documents": context.get("related_documents", []),
                 "amendment_notice": context.get("amendment_notice"),
+                "source_location": {
+                    "chunk_id": str(child_id),
+                    "display_chunk_id": str(target_id),
+                    "primary": primary_anchor,
+                    "anchors": matched_anchors,
+                },
                 "scores": {"rrf": round(_score, 4)},
                 "recall_sources": (
                     ["semantic"]

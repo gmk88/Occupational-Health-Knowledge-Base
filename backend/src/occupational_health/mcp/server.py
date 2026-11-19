@@ -398,6 +398,7 @@ def build_server() -> FastMCP:
                 "standard_no": item.get("standard_no"),
                 "related_documents": item.get("related_documents") or [],
                 "amendment_notice": item.get("amendment_notice"),
+                "source_location": item.get("source_location"),
                 "score": round(float((item.get("scores") or {}).get("rrf") or 0), 4),
             }
             table = item.get("table")
@@ -439,8 +440,19 @@ def build_server() -> FastMCP:
         data, error = await _request("GET", f"/chunks/{chunk_id}", _bearer(ctx))
         if error:
             return error
+        anchors: list[dict[str, Any]] = []
+        document_id = data.get("document_id")
+        if document_id:
+            anchor_data, anchor_error = await _request(
+                "GET",
+                f"/documents/{document_id}/chunks/{chunk_id}/anchors",
+                _bearer(ctx),
+            )
+            if not anchor_error:
+                anchors = anchor_data.get("anchors") or []
         return {
             "chunk_id": data.get("id"),
+            "matched_chunk_id": chunk_id,
             "document_id": data.get("document_id"),
             "document": data.get("document_name"),
             "version_number": data.get("version_number"),
@@ -449,6 +461,10 @@ def build_server() -> FastMCP:
             "pages": _page_label(data),
             "kind": data.get("block_type"),
             "table_header": data.get("table_header"),
+            "source_location": {
+                "primary": anchors[0] if anchors else None,
+                "anchors": anchors,
+            },
             # 表格块的 text 本身就是 Markdown 表格文本，直接返回即可。
             "text": _clip(data.get("text") or "", 4000),
         }
