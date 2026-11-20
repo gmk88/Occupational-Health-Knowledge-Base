@@ -3,9 +3,10 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
+from occupational_health.db.models.enum_type import value_enum
 from occupational_health.db.session import Base, utcnow
 from occupational_health.domain.enums import RelationKind
 
@@ -73,7 +74,7 @@ class DocumentRelation(Base):
         ForeignKey("documents.id", ondelete="CASCADE"), index=True
     )
     relation_type: Mapped[RelationKind] = mapped_column(
-        Enum(RelationKind, native_enum=False, length=30), index=True
+        value_enum(RelationKind, 30), index=True
     )
     volume_no: Mapped[str | None] = mapped_column(String(30))
     note: Mapped[str | None] = mapped_column()

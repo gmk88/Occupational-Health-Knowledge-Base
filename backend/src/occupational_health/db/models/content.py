@@ -6,7 +6,6 @@ from datetime import datetime
 from sqlalchemy import (
     Boolean,
     DateTime,
-    Enum,
     ForeignKey,
     Integer,
     Numeric,
@@ -17,6 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from occupational_health.db.models.enum_type import value_enum
 from occupational_health.db.session import Base, utcnow
 from occupational_health.domain.enums import PageSource, PageStatus, SensitiveType
 
@@ -35,9 +35,7 @@ class Page(Base):
     )
     pipeline_revision: Mapped[uuid.UUID] = mapped_column(index=True)
     page_number: Mapped[int] = mapped_column(Integer)
-    source_type: Mapped[PageSource] = mapped_column(
-        Enum(PageSource, native_enum=False, length=20)
-    )
+    source_type: Mapped[PageSource] = mapped_column(value_enum(PageSource, 20))
     raw_text: Mapped[str] = mapped_column(Text)
     cleaned_text: Mapped[str] = mapped_column(Text)
     masked_text: Mapped[str] = mapped_column(Text, default="")
@@ -47,7 +45,7 @@ class Page(Base):
     ocr_confidence: Mapped[float | None] = mapped_column(Numeric(4, 3))
     layout_warning_codes: Mapped[list] = mapped_column(JSONB, default=list)
     status: Mapped[PageStatus] = mapped_column(
-        Enum(PageStatus, native_enum=False, length=20), default=PageStatus.PENDING
+        value_enum(PageStatus, 20), default=PageStatus.PENDING
     )
     failure_code: Mapped[str | None] = mapped_column(String(50))
     safe_failure_message: Mapped[str | None] = mapped_column(String(500))
@@ -74,9 +72,7 @@ class MaskingAnnotation(Base):
     start_offset: Mapped[int] = mapped_column(Integer)
     end_offset: Mapped[int] = mapped_column(Integer)
     base_text_hash: Mapped[str] = mapped_column(String(64))
-    sensitive_type: Mapped[SensitiveType] = mapped_column(
-        Enum(SensitiveType, native_enum=False, length=20)
-    )
+    sensitive_type: Mapped[SensitiveType] = mapped_column(value_enum(SensitiveType, 20))
     replacement: Mapped[str] = mapped_column(String(100))
     origin: Mapped[str] = mapped_column(String(20), default="rule")
     review_status: Mapped[str] = mapped_column(String(20), default="accepted")

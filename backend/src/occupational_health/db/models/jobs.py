@@ -5,7 +5,6 @@ from datetime import datetime
 
 from sqlalchemy import (
     DateTime,
-    Enum,
     ForeignKey,
     Integer,
     Numeric,
@@ -15,6 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from occupational_health.db.models.enum_type import value_enum
 from occupational_health.db.session import Base, utcnow
 from occupational_health.domain.enums import JobStage, JobStatus, JobType
 
@@ -29,9 +29,7 @@ class ProcessingJob(Base):
     version_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("document_versions.id", ondelete="CASCADE"), index=True
     )
-    job_type: Mapped[JobType] = mapped_column(
-        Enum(JobType, native_enum=False, length=20)
-    )
+    job_type: Mapped[JobType] = mapped_column(value_enum(JobType, 20))
     trigger_source: Mapped[str] = mapped_column(String(20), default="web")
     chunk_mode: Mapped[str] = mapped_column(String(20), default="fixed")
     # 可选的逐任务切分参数；为空时由 pipeline 回退到全局 settings 默认值。
@@ -39,12 +37,12 @@ class ProcessingJob(Base):
     chunk_max_tokens: Mapped[int | None] = mapped_column(Integer, default=None)
     chunk_overlap_tokens: Mapped[int | None] = mapped_column(Integer, default=None)
     status: Mapped[JobStatus] = mapped_column(
-        Enum(JobStatus, native_enum=False, length=20),
+        value_enum(JobStatus, 20),
         default=JobStatus.QUEUED,
         index=True,
     )
     current_stage: Mapped[JobStage] = mapped_column(
-        Enum(JobStage, native_enum=False, length=20), default=JobStage.VALIDATION
+        value_enum(JobStage, 20), default=JobStage.VALIDATION
     )
     pipeline_revision: Mapped[uuid.UUID] = mapped_column(default=uuid.uuid4, index=True)
     target_activation_epoch: Mapped[int] = mapped_column(Integer)

@@ -1,5 +1,4 @@
-﻿# 单服务看门狗：子进程退出按 5/15/30/60 秒退避重启；
-# 5 分钟内快速失败超过 10 次则暂停 5 分钟；探活连续失败 3 次强制重启。
+﻿# Single-service watchdog with restart backoff and optional HTTP probe.
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('api', 'embedding', 'worker', 'worker-embedding', 'tunnel')]
@@ -17,7 +16,7 @@ $WorkingDirectory = $Backend
 
 switch ($Service) {
     'api' {
-        $display = '后端 API'
+        $display = 'Backend API'
         $serviceArgs = @(
             '-m', 'uvicorn', 'occupational_health.api.main:app',
             '--host', '127.0.0.1', '--port', '8000',
@@ -28,7 +27,7 @@ switch ($Service) {
         $logName = 'backend.log'
     }
     'embedding' {
-        $display = '向量化服务'
+        $display = 'Embedding Service'
         $serviceArgs = @(
             '-m', 'uvicorn', 'occupational_health.services.embedding.server:app',
             '--host', '127.0.0.1', '--port', '8001'
@@ -38,7 +37,7 @@ switch ($Service) {
         $logName = 'embedding.log'
     }
     'worker' {
-        $display = '文档处理 worker'
+        $display = 'Document Worker'
         $serviceArgs = @(
             '-m', 'celery', '-A', 'occupational_health.workers.celery_app',
             'worker', '--pool=solo', '--loglevel=info', '--concurrency=1',
@@ -49,7 +48,7 @@ switch ($Service) {
         $logName = 'celery.log'
     }
     'worker-embedding' {
-        $display = '向量化 worker'
+        $display = 'Embedding Worker'
         $serviceArgs = @(
             '-m', 'celery', '-A', 'occupational_health.workers.celery_app',
             'worker', '--pool=solo', '--loglevel=info', '--concurrency=1',
@@ -69,12 +68,12 @@ switch ($Service) {
             )
             $Executable = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
         }
-        if (-not $Executable) { throw '未找到 cloudflared，请先安装或加入 PATH' }
+        if (-not $Executable) { throw 'cloudflared not found' }
         $config = Join-Path $Root 'var\cloudflared\config.yml'
         if (-not (Test-Path $config)) {
             $config = Join-Path $Root 'deploy\cloudflared\config.yml'
         }
-        if (-not (Test-Path $config)) { throw "缺少隧道配置：$config" }
+        if (-not (Test-Path $config)) { throw "Tunnel config not found: $config" }
         $serviceArgs = @('tunnel', '--config', $config, 'run')
         $WorkingDirectory = $Root
         $probeUrl = $null
@@ -101,12 +100,15 @@ $fastFailures = 0
 $windowStart = Get-Date
 
 while ($true) {
-    # 保留上一次运行的日志，方便定位崩溃原因。
-    if (Test-Path $outLog) { Move-Item -Force $outLog "$outLog.prev" }
-    if (Test-Path $errLog) { Move-Item -Force $errLog "$errLog.prev" }
+    try {
+        if (Test-Path $outLog) { Move-Item -Force $outLog "$outLog.prev" -ErrorAction Stop }
+    } catch { }
+    try {
+        if (Test-Path $errLog) { Move-Item -Force $errLog "$errLog.prev" -ErrorAction Stop }
+    } catch { }
 
     $started = Get-Date
-    Write-Host ("[{0}] 启动 {1}" -f $started.ToString('HH:mm:ss'), $display)
+    Write-Host ("[{0}] START {1}" -f $started.ToString('HH:mm:ss'), $display)
     $proc = Start-Process -FilePath $Executable -ArgumentList $serviceArgs `
         -WorkingDirectory $WorkingDirectory -WindowStyle Hidden -PassThru `
         -RedirectStandardOutput $outLog -RedirectStandardError $errLog
@@ -120,16 +122,16 @@ while ($true) {
             $probeFailures = 0
         } elseif (((Get-Date) - $started).TotalSeconds -ge $startupGrace) {
             $probeFailures++
-            Write-Host ("[{0}] {1} 探活失败 {2}/3" -f (Get-Date).ToString('HH:mm:ss'), $display, $probeFailures)
+            Write-Host ("[{0}] PROBE FAIL {1} {2}/3" -f (Get-Date).ToString('HH:mm:ss'), $display, $probeFailures)
             if ($probeFailures -ge 3) {
-                Write-Host "[$Service] 连续探活失败，强制重启"
+                Write-Host "[$Service] restart after probe failures"
                 Stop-Process -Id $proc.Id -Force
             }
         }
     }
 
     $runtime = ((Get-Date) - $started).TotalSeconds
-    Write-Host ("[{0}] {1} 已退出（运行 {2:N0} 秒）" -f (Get-Date).ToString('HH:mm:ss'), $display, $runtime)
+    Write-Host ("[{0}] EXIT {1} ({2:N0}s)" -f (Get-Date).ToString('HH:mm:ss'), $display, $runtime)
 
     if ($runtime -lt 60) {
         if (((Get-Date) - $windowStart).TotalMinutes -ge 5) {
@@ -138,7 +140,7 @@ while ($true) {
         }
         $fastFailures++
         if ($fastFailures -gt 10) {
-            Write-Host "[$Service] 5 分钟内快速失败超过 10 次，暂停 5 分钟后再试"
+            Write-Host "[$Service] pause 5 minutes after repeated fast failures"
             Start-Sleep -Seconds 300
             $fastFailures = 0
             $windowStart = Get-Date
@@ -151,6 +153,6 @@ while ($true) {
         $delay = 5
     }
 
-    Write-Host "[$Service] $delay 秒后重启"
+    Write-Host "[$Service] restart in $delay seconds"
     Start-Sleep -Seconds $delay
 }

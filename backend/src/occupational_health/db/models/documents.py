@@ -5,7 +5,6 @@ from datetime import datetime
 
 from sqlalchemy import (
     DateTime,
-    Enum,
     ForeignKey,
     Integer,
     String,
@@ -15,6 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from occupational_health.db.models.enum_type import value_enum
 from occupational_health.db.session import Base, utcnow
 from occupational_health.domain.enums import (
     DocumentRole,
@@ -54,17 +54,17 @@ class Document(Base):
         ForeignKey("users.id", ondelete="RESTRICT"), index=True
     )
     status: Mapped[DocumentStatus] = mapped_column(
-        Enum(DocumentStatus, native_enum=False, length=20),
+        value_enum(DocumentStatus, 20),
         default=DocumentStatus.PROCESSING,
         index=True,
     )
     lifecycle_status: Mapped[LifecycleStatus] = mapped_column(
-        Enum(LifecycleStatus, native_enum=False, length=20),
+        value_enum(LifecycleStatus, 20),
         default=LifecycleStatus.CURRENT,
         index=True,
     )
     document_role: Mapped[DocumentRole] = mapped_column(
-        Enum(DocumentRole, native_enum=False, length=20),
+        value_enum(DocumentRole, 20),
         default=DocumentRole.MAIN,
         index=True,
     )
@@ -102,7 +102,7 @@ class DocumentVersion(Base):
     )
     content_sha256: Mapped[str] = mapped_column(String(64))
     status: Mapped[VersionStatus] = mapped_column(
-        Enum(VersionStatus, native_enum=False, length=20),
+        value_enum(VersionStatus, 20),
         default=VersionStatus.PROCESSING,
     )
     quality_summary: Mapped[dict | None] = mapped_column(JSONB)
