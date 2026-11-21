@@ -46,6 +46,20 @@ def test_rows_to_html_keeps_span_attributes() -> None:
     assert "<table>" in html
 
 
+def test_rows_to_html_preserves_subrow_breaks() -> None:
+    rows = [[TableCell("甲\n乙"), TableCell("1")]]
+    html = rows_to_html(rows)
+    assert "<td>甲<br>乙</td>" in html
+    assert parse_html_table(html)[0][0].text == "甲\n乙"
+
+
+def test_markdown_rows_to_html_preserves_br_markers() -> None:
+    html = markdown_rows_to_html(["| 甲<br>乙 | 1 |"])
+    assert "&lt;br&gt;" not in html
+    assert "<th>甲<br>乙</th>" in html
+    assert parse_html_table(html)[0][0].text == "甲\n乙"
+
+
 def test_merge_rows_drops_repeated_header() -> None:
     first = parse_html_table(
         "<table><tr><td>A</td><td>B</td></tr><tr><td>1</td><td>2</td></tr></table>"

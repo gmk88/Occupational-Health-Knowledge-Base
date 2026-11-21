@@ -21,7 +21,8 @@ export function tableToHtml(table: TableInfo): string {
           const spans =
             (cell.rowspan > 1 ? ` rowspan="${cell.rowspan}"` : '') +
             (cell.colspan > 1 ? ` colspan="${cell.colspan}"` : '');
-          return `<${tag}${spans}>${escapeHtml(cell.text)}</${tag}>`;
+          const content = escapeHtml(cell.text).replace(/\r?\n/g, '<br>');
+          return `<${tag}${spans}>${content}</${tag}>`;
         })
         .join('');
       return `<tr>${cells}</tr>`;

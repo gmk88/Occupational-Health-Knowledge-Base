@@ -15,6 +15,7 @@ from html.parser import HTMLParser
 
 _INLINE_WHITESPACE = re.compile(r"[ \t]+")
 _NEWLINE_RUN = re.compile(r"\n+")
+_BR_TAG = re.compile(r"<br\s*/?>", re.I)
 
 
 @dataclass(frozen=True)
@@ -149,6 +150,12 @@ def rows_to_markdown(rows: list[list[TableCell]]) -> list[str]:
     return lines
 
 
+def _cell_html(value: str) -> str:
+    """Escape cell text while keeping sub-row breaks as real <br> tags."""
+    normalized = _BR_TAG.sub("\n", value)
+    return "<br>".join(html_lib.escape(part) for part in normalized.split("\n"))
+
+
 def rows_to_html(rows: list[list[TableCell]]) -> str:
     """Serialise cells back to a normalised, escaped HTML table."""
     parts = ["<table>"]
@@ -160,7 +167,7 @@ def rows_to_html(rows: list[list[TableCell]]) -> str:
                 attrs += f' rowspan="{cell.rowspan}"'
             if cell.colspan > 1:
                 attrs += f' colspan="{cell.colspan}"'
-            parts.append(f"<td{attrs}>{html_lib.escape(cell.text)}</td>")
+            parts.append(f"<td{attrs}>{_cell_html(cell.text)}</td>")
         parts.append("</tr>")
     parts.append("</table>")
     return "".join(parts)
@@ -174,7 +181,7 @@ def markdown_rows_to_html(rows: list[str]) -> str:
         parts.append("<tr>")
         for cell in cells:
             tag = "th" if index == 0 else "td"
-            parts.append(f"<{tag}>{html_lib.escape(cell)}</{tag}>")
+            parts.append(f"<{tag}>{_cell_html(cell)}</{tag}>")
         parts.append("</tr>")
     parts.append("</table>")
     return "".join(parts)

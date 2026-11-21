@@ -2846,7 +2846,8 @@ body {
   padding: 8px 12px;
   border-bottom: 1px solid var(--color-border);
   text-align: left;
-  white-space: nowrap;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
 .result-table th {
@@ -2993,7 +2994,7 @@ body {
 .preview-body .table-view th,
 .preview-body .table-view td {
   padding: 10px 14px;
-  white-space: normal;
+  white-space: pre-line;
   overflow-wrap: anywhere;
 }
 

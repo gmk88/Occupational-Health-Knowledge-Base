@@ -53,6 +53,16 @@ function CopyButton({
   );
 }
 
+// 单元格里的换行代表表格子行；HTML 会折叠换行，需显式渲染 <br> 分行。
+function CellLines({ text }: { text: string }) {
+  return text.split(/\r?\n/).map((line, index) => (
+    <span key={index}>
+      {index > 0 && <br />}
+      {line}
+    </span>
+  ));
+}
+
 function TableView({ table }: { table: TableInfo }) {
   if (table.rows.length === 0) return <p>{table.header ?? '表格内容为空'}</p>;
   return (
@@ -65,11 +75,11 @@ function TableView({ table }: { table: TableInfo }) {
                 {row.map((cell, cellIndex) => (
                   rowIndex === 0 ? (
                     <th key={cellIndex} rowSpan={cell.rowspan} colSpan={cell.colspan}>
-                      {cell.text}
+                      <CellLines text={cell.text} />
                     </th>
                   ) : (
                     <td key={cellIndex} rowSpan={cell.rowspan} colSpan={cell.colspan}>
-                      {cell.text}
+                      <CellLines text={cell.text} />
                     </td>
                   )
                 ))}

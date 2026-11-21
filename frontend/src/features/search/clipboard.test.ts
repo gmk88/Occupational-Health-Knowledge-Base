@@ -64,6 +64,23 @@ describe('clipboard 表格格式化', () => {
     expect(html).not.toContain('<限值>');
   });
 
+  it('单元格子行在富文本里保留为 <br>，纯文本兜底不破坏行列', () => {
+    const subrowTable: TableInfo = {
+      ...table,
+      rows: [[
+        { text: '粉尘\n纤维', rowspan: 1, colspan: 1 },
+        { text: 'Asbestos dust\nAsbestos fibre', rowspan: 1, colspan: 1 },
+      ]],
+    };
+    const html = tableToHtml(subrowTable);
+    expect(html).toContain('粉尘<br>纤维');
+    expect(html).toContain('Asbestos dust<br>Asbestos fibre');
+    expect(html).not.toContain('粉尘\n纤维');
+    expect(tableToPlain(subrowTable)).toBe(
+      '表 1 职业接触限值\n粉尘 纤维\tAsbestos dust Asbestos fibre',
+    );
+  });
+
   it('纯文本兜底带题注且用制表符分列', () => {
     const plain = tableToPlain(table);
     const lines = plain.split('\n');
