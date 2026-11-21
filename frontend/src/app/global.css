@@ -867,6 +867,14 @@ button.document-item {
   border-radius: var(--radius-md);
 }
 
+.page-chunk-highlight {
+  color: var(--color-text, var(--ink, #16211d));
+  background: var(--color-warning-soft, #fff4e0);
+  border-bottom: 2px solid var(--color-warning, #8a5300);
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px rgba(138, 83, 0, 0.14);
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;

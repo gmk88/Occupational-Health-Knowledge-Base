@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getQualityReport, listDocuments, type Document, type QualityReport as Quality } from '../services/documents';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { getDocument, getQualityReport, listDocuments, type Document, type QualityReport as Quality } from '../services/documents';
 import { DocumentDetail } from '../features/documents/DocumentDetail';
 import { PagePreview } from '../features/documents/PagePreview';
 import { QualityReport as QualityReportView } from '../features/documents/QualityReport';
 import { UploadForm } from '../features/documents/UploadForm';
 import {
+  Alert,
   Button,
   Card,
   CardGrid,
@@ -37,6 +39,12 @@ function formatDate(value: string | null | undefined) {
 }
 
 export function DocumentsPage() {
+  const { documentId } = useParams();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const linkChunkId = searchParams.get('chunk_id') ?? '';
+  const linkPage = Number.parseInt(searchParams.get('page') ?? '', 10) || 1;
+  const linkPageEnd = Number.parseInt(searchParams.get('page_end') ?? '', 10) || 0;
   const [documents, setDocuments] = useState<Document[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -46,6 +54,7 @@ export function DocumentsPage() {
   const [report, setReport] = useState<Quality | null>(null);
   const [reportError, setReportError] = useState(false);
   const [tab, setTab] = useState<Tab>('detail');
+  const [linkError, setLinkError] = useState('');
 
   const refresh = useCallback(async () => {
     const response = await listDocuments({ page, status: status || undefined });
@@ -100,11 +109,42 @@ export function DocumentsPage() {
     };
   }, [hasProcessing, refresh]);
 
+  // 检索结果「定位原文」深链：直接选中文档、切到页面预览并保留 chunk 参数。
+  useEffect(() => {
+    if (!documentId) return;
+    let active = true;
+    void (async () => {
+      setLinkError('');
+      setReport(null);
+      setReportError(false);
+      try {
+        const response = await getDocument(documentId);
+        if (!active) return;
+        setSelected(response.data);
+        setTab('preview');
+      } catch {
+        if (!active) return;
+        setSelected(null);
+        setLinkError('未找到该文档，可能已被删除。');
+        return;
+      }
+      try {
+        const response = await getQualityReport(documentId);
+        if (active) setReport(response.data);
+      } catch {
+        if (active) setReportError(true);
+      }
+    })();
+    return () => { active = false; };
+  }, [documentId, linkChunkId, linkPage]);
+
   async function open(document: Document) {
+    if (documentId) void navigate('/documents');
     setSelected(document);
     setTab('detail');
     setReport(null);
     setReportError(false);
+    setLinkError('');
     try {
       setReport((await getQualityReport(document.id)).data);
     } catch {
@@ -113,9 +153,11 @@ export function DocumentsPage() {
   }
 
   function close() {
+    if (documentId) void navigate('/documents');
     setSelected(null);
     setReport(null);
     setReportError(false);
+    setLinkError('');
   }
 
   return (
@@ -142,6 +184,8 @@ export function DocumentsPage() {
         }
         meta={`第 ${page} / ${Math.max(totalPages, 1)} 页 · 共 ${total} 篇`}
       />
+
+      {linkError && <Alert tone="danger">{linkError}</Alert>}
 
       <CardGrid>
         <CardStack span={5}>
@@ -226,7 +270,13 @@ export function DocumentsPage() {
               )}
               {tab === 'preview' && (
                 report ? (
-                  <PagePreview documentId={selected.id} pageCount={report.page_count} />
+                  <PagePreview
+                    documentId={selected.id}
+                    pageCount={report.page_count}
+                    initialPage={linkPage}
+                    chunkId={linkChunkId || undefined}
+                    chunkPageEnd={linkPageEnd || undefined}
+                  />
                 ) : (
                   <p className="hint">{reportError ? '暂无页面可预览。' : '加载中…'}</p>
                 )

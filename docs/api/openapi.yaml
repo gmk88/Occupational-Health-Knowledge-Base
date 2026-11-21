@@ -354,6 +354,12 @@ paths:
             type: string
             enum: [masked, raw]
             default: masked
+        - name: chunk_id
+          in: query
+          description: 检索结果中的切分块 ID；传入后 spans 返回该块在页面文本中的高亮区间
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: 页面提取文本与定位信息
@@ -1442,6 +1448,10 @@ components:
               end_offset:
                 type: integer
                 minimum: 1
+              type:
+                type: string
+                description: chunk 表示检索命中的切分块区间
+                enum: [chunk]
               bbox:
                 type: array
                 items:

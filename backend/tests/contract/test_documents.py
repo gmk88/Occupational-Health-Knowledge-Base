@@ -38,7 +38,8 @@ class FakeDocumentService:
     def update_metadata(self, document_id, title, category_id, tags, source, notes):
         return self.get_document(document_id)
 
-    def get_page(self, document_id, page_number, raw):
+    def get_page(self, document_id, page_number, raw, chunk_id=None):
+        self.last_chunk_id = chunk_id
         return {
             "document_id": str(document_id),
             "version_number": 1,
@@ -46,7 +47,9 @@ class FakeDocumentService:
             "source_type": "text_layer",
             "view": "raw" if raw else "masked",
             "text": "脱敏正文" if not raw else "原文",
-            "spans": [],
+            "spans": [{"start_offset": 0, "end_offset": 4, "type": "chunk"}]
+            if chunk_id
+            else [],
             "quality_warnings": [],
         }
 
@@ -171,6 +174,28 @@ def test_raw_page_is_admin_only(client) -> None:
     assert (
         client.get(f"/api/v1/documents/{document_id}/pages/1?view=raw").status_code
         == 403
+    )
+
+
+def test_page_endpoint_passes_chunk_id_for_highlight(client) -> None:
+    login(client, "viewer", "correct-horse-viewer")
+    chunk_id = str(uuid.uuid4())
+    document_id = str(uuid.uuid4())
+
+    response = client.get(
+        f"/api/v1/documents/{document_id}/pages/1?chunk_id={chunk_id}"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["spans"] == [
+        {"start_offset": 0, "end_offset": 4, "type": "chunk"}
+    ]
+    assert str(client.app.state.document_service.last_chunk_id) == chunk_id
+    assert (
+        client.get(
+            f"/api/v1/documents/{document_id}/pages/1?chunk_id=not-a-uuid"
+        ).status_code
+        == 400
     )
 
 

@@ -286,12 +286,17 @@ def get_page(
     document_id: str,
     page_number: int,
     view: str = "masked",
+    chunk_id: str | None = None,
     principal: PrincipalData = Depends(require_user),
 ) -> dict:
     raw = view == "raw"
     if raw and principal.role != UserRole.ADMIN:
         raise ApiError(403, "FORBIDDEN", "原文仅管理员可查看")
-    return success(_service(request).get_page(uuid.UUID(document_id), page_number, raw))
+    return success(
+        _service(request).get_page(
+            uuid.UUID(document_id), page_number, raw, _uuid(chunk_id)
+        )
+    )
 
 
 @router.get("/{document_id}/quality-report")

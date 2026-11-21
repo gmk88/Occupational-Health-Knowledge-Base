@@ -162,7 +162,14 @@ export function SearchResults({ results, degraded, tookMs }: { results: SearchRe
               )}
               <p className="hint">RRF {result.scores.rrf.toFixed(4)} · {result.recall_sources.join('+')}</p>
             </div>
-            <div className="result-link"><SourceLink documentId={result.document_id} page={result.page_start} /></div>
+            <div className="result-link">
+              <SourceLink
+                documentId={result.document_id}
+                page={result.page_start}
+                pageEnd={result.page_end}
+                chunkId={result.chunk_id}
+              />
+            </div>
           </li>
         ))}
       </ol>

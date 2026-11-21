@@ -90,7 +90,7 @@ class DemoDocumentService:
     def update_metadata(self, document_id, title, category_id, tags, source, notes):
         return self.get_document(document_id)
 
-    def get_page(self, document_id, page_number, raw):
+    def get_page(self, document_id, page_number, raw, chunk_id=None):
         document_id = str(document_id)
         if document_id == SAMPLE_DOCUMENTS[0]["id"]:
             text = (

@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from occupational_health.core.errors import ApiError
-from occupational_health.db.models.content import Page
+from occupational_health.db.models.content import Chunk, Page
 from occupational_health.db.models.documents import (
     Document,
     DocumentFingerprint,
@@ -37,6 +37,7 @@ from occupational_health.domain.enums import (
     RelationKind,
     VersionStatus,
 )
+from occupational_health.services.documents.locating import locate_chunk
 from occupational_health.services.ingestion.document_validator import validate_document
 from occupational_health.storage.files import PrivateFileStorage
 
@@ -675,7 +676,13 @@ class DocumentService:
             db.commit()
             return self._document_dict(db, document)
 
-    def get_page(self, document_id: uuid.UUID, page_number: int, raw: bool) -> dict:
+    def get_page(
+        self,
+        document_id: uuid.UUID,
+        page_number: int,
+        raw: bool,
+        chunk_id: uuid.UUID | None = None,
+    ) -> dict:
         with SessionLocal() as db:
             document = db.get(Document, document_id)
             if not document or document.status == DocumentStatus.DELETED:
@@ -695,6 +702,21 @@ class DocumentService:
             if not page:
                 raise ApiError(404, "NOT_FOUND", "页面不存在")
             text = page.masked_text if not raw else page.cleaned_text
+            spans: list[dict] = []
+            if chunk_id is not None:
+                # 只定位当前版本、当前文档的切分块，避免越权读取历史版本内容。
+                chunk = db.scalar(
+                    select(Chunk).where(
+                        Chunk.id == chunk_id,
+                        Chunk.document_id == document_id,
+                        Chunk.version_id == version.id,
+                        Chunk.page_start <= page_number,
+                        Chunk.page_end >= page_number,
+                    )
+                )
+                if chunk:
+                    chunk_text = chunk.raw_text if raw else chunk.masked_text
+                    spans = locate_chunk(text, chunk_text)
             return {
                 "document_id": str(document_id),
                 "version_number": version.version_number,
@@ -702,7 +724,7 @@ class DocumentService:
                 "source_type": page.source_type.value,
                 "view": "raw" if raw else "masked",
                 "text": text,
-                "spans": [],
+                "spans": spans,
                 "quality_warnings": page.layout_warning_codes,
             }
 
